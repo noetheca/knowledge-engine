@@ -67,6 +67,111 @@
   padding-inline: 0.4rem 0.6rem;
 }
 
+.kg-toolbar__controls {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  margin-left: auto;
+}
+
+.kg-toolbar .kg-control-icon,
+.kg-settings > summary {
+  align-items: center;
+  background: var(--surface);
+  border: 2px solid var(--text);
+  border-radius: 999px;
+  box-shadow: 0 4px 0 var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 2.75rem;
+  height: 2.75rem;
+  justify-content: center;
+  list-style: none;
+  min-height: 2.75rem;
+  padding: 0.55rem;
+  width: 2.75rem;
+}
+
+.kg-settings {
+  position: relative;
+}
+
+.kg-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kg-thumbnail-toggle[aria-pressed="true"],
+.kg-settings[open] > summary {
+  box-shadow: none;
+  transform: translateY(3px);
+}
+
+.kg-toolbar .kg-control-icon:focus-visible,
+.kg-settings > summary:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 3px;
+}
+
+.kg-control-icon__graphic {
+  fill: none;
+  height: 1.35rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 1.35rem;
+}
+
+.kg-control-icon__graphic--text {
+  display: none;
+}
+
+.kg-thumbnail-toggle[aria-pressed="true"]
+  .kg-control-icon__graphic--thumbnail {
+  display: none;
+}
+
+.kg-thumbnail-toggle[aria-pressed="true"]
+  .kg-control-icon__graphic--text {
+  display: block;
+}
+
+.kg-settings__panel {
+  background: var(--surface);
+  border: 2px solid var(--text);
+  border-radius: 1.1rem;
+  box-shadow: 0 6px 0 var(--shadow);
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.8rem);
+  width: min(18rem, calc(100vw - 1.5rem));
+  z-index: 12;
+}
+
+.kg-settings__panel label {
+  display: grid;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 0.45rem;
+  grid-template-columns: 1fr auto;
+}
+
+.kg-settings__panel output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.kg-settings__panel input[type="range"] {
+  accent-color: var(--text);
+  cursor: pointer;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 .kg-map-layout,
 .kg-map {
   min-width: 0;
@@ -125,6 +230,11 @@
   stroke-width: 2;
 }
 
+.knowledge-graph[data-relationship-mode="contextual"] .kg-edges path[data-edge-kind="related"] {
+  opacity: 0.48;
+  stroke-dasharray: none;
+}
+
 .kg-edge-arrow {
   fill: var(--text);
   opacity: 1;
@@ -153,6 +263,12 @@
   opacity: 0;
 }
 
+.knowledge-graph[data-relationship-mode="contextual"][data-selected-node]
+  .kg-edges
+  path[data-edge-kind="related"] {
+  opacity: 0.22;
+}
+
 .knowledge-graph[data-selected-node] .kg-edges path[data-edge-kind="related"].is-connected {
   opacity: 1;
   stroke-width: 2;
@@ -174,6 +290,35 @@
   text-align: center;
   user-select: none;
   will-change: left, top;
+}
+
+.kg-node__thumbnail {
+  border-radius: calc(1.45rem - 3px);
+  display: none;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+
+.knowledge-graph[data-node-display="thumbnail"]
+  .kg-node[data-has-thumbnail="true"] {
+  overflow: hidden;
+  padding: 0;
+}
+
+.knowledge-graph[data-node-display="thumbnail"]
+  .kg-node[data-has-thumbnail="true"]
+  .kg-node__thumbnail {
+  display: block;
+}
+
+.knowledge-graph[data-node-display="thumbnail"]
+  .kg-node[data-has-thumbnail="true"]
+  strong {
+  display: none;
 }
 
 .kg-node strong {
@@ -259,6 +404,10 @@
 .kg-legend__sample[data-edge-kind="related"] {
   border-top-style: dotted;
   border-top-width: 2px;
+}
+
+.knowledge-graph[data-relationship-mode="contextual"] .kg-legend__sample[data-edge-kind="related"] {
+  border-top-style: solid;
 }
 
 .kg-inspector {
@@ -402,6 +551,31 @@
 
 .kg-detail__summary {
   color: var(--muted);
+}
+
+.kg-detail__facts {
+  border-top: 1px solid var(--line-soft);
+  display: grid;
+  gap: 0.8rem;
+  margin-block: 1.3rem 0;
+  padding-top: 1rem;
+}
+
+.kg-detail__facts div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.kg-detail__facts dt {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kg-detail__facts dd {
+  color: var(--muted);
+  margin: 0;
 }
 
 .kg-detail__status {

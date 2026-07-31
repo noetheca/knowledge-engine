@@ -39,6 +39,7 @@ interface GraphConnection {
   target: string;
   restX: number;
   restY: number;
+  restDistance: number;
 }
 
 interface SafeArea {
@@ -97,6 +98,19 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     root.querySelector<HTMLElement>("[data-reader-navigation]");
   const readerFullPage =
     root.querySelector<HTMLAnchorElement>("[data-reader-full-page]");
+  const thumbnailToggle =
+    root.querySelector<HTMLButtonElement>("[data-graph-thumbnail-toggle]");
+  const settings =
+    root.querySelector<HTMLDetailsElement>("[data-graph-settings]");
+  const settingsSummary = settings?.querySelector<HTMLElement>("summary");
+  const nodeSizeControl =
+    root.querySelector<HTMLInputElement>("[data-node-size-control]");
+  const nodeSizeOutput =
+    root.querySelector<HTMLOutputElement>("[data-node-size-output]");
+  const repulsionControl =
+    root.querySelector<HTMLInputElement>("[data-repulsion-control]");
+  const repulsionOutput =
+    root.querySelector<HTMLOutputElement>("[data-repulsion-output]");
 
   if (
     !viewport ||
@@ -126,19 +140,30 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     ...root.querySelectorAll<HTMLButtonElement>("[data-knowledge-node]"),
   ];
   const nodePositions = new Map<string, NodePosition>();
+  const nodeBaseSizes = new Map<string, { width: number; height: number }>();
+  const chronologyAnchorCentersY = new Map<string, number>();
+  const chronologyAnchored = root.dataset.chronologyAxis === "y";
   for (const node of nodeElements) {
     const nodeId = node.dataset.knowledgeNode;
     if (!nodeId) {
       continue;
     }
+    const initialY = Number.parseFloat(node.style.top);
+    const initialWidth = Number.parseFloat(node.style.width);
+    const initialHeight = Number.parseFloat(node.style.height);
     nodePositions.set(nodeId, {
       x: Number.parseFloat(node.style.left),
-      y: Number.parseFloat(node.style.top),
-      width: Number.parseFloat(node.style.width),
-      height: Number.parseFloat(node.style.height),
+      y: initialY,
+      width: initialWidth,
+      height: initialHeight,
       velocityX: 0,
       velocityY: 0,
     });
+    nodeBaseSizes.set(nodeId, {
+      width: initialWidth,
+      height: initialHeight,
+    });
+    chronologyAnchorCentersY.set(nodeId, initialY + initialHeight / 2);
   }
   const nodeElementsById = new Map(
     nodeElements.flatMap((node) => {
@@ -153,6 +178,18 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         return edgeId ? [[edgeId, arrow] as const] : [];
       }),
   );
+  const contextualRestDistance = (
+    source: NodePosition,
+    target: NodePosition,
+  ): number =>
+    clamp(
+      Math.max(
+        (source.width + target.width) / 2,
+        (source.height + target.height) / 2,
+      ) + 72,
+      220,
+      360,
+    );
   const connections: GraphConnection[] = [];
   for (const edge of root.querySelectorAll<SVGPathElement>(
     "[data-knowledge-edge]",
@@ -169,6 +206,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       target: targetId,
       restX: target.x - source.x,
       restY: target.y - source.y,
+      restDistance: contextualRestDistance(source, target),
     });
   }
 
@@ -182,9 +220,15 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let simulationFrame = 0;
   let simulationTicks = 0;
   let simulationAnchorId: string | undefined;
+  let contextualLayoutWarmed = false;
+  let contextualUnrenderedMotion = 0;
+  let contextualRepulsionMultiplier = 1;
   let readerRequest: AbortController | undefined;
   let readerTrigger: HTMLElement | undefined;
   const readerModalQuery = window.matchMedia("(max-width: 52rem)");
+  const reducedMotionQuery = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  );
   const contextualRelationships =
     root.dataset.relationshipMode === "contextual";
   const listFirst =
@@ -393,8 +437,216 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     scheduleInspectorPosition();
   };
 
+  const applyNodeScale = (scale: number): void => {
+    for (const [nodeId, position] of nodePositions) {
+      const baseSize = nodeBaseSizes.get(nodeId);
+      const node = nodeElementsById.get(nodeId);
+      if (!baseSize || !node) {
+        continue;
+      }
+      const centerX = position.x + position.width / 2;
+      const centerY = position.y + position.height / 2;
+      position.width = baseSize.width * scale;
+      position.height = baseSize.height * scale;
+      position.x = centerX - position.width / 2;
+      position.y = centerY - position.height / 2;
+      position.velocityX = 0;
+      position.velocityY = 0;
+      node.style.width = `${position.width}px`;
+      node.style.height = `${position.height}px`;
+    }
+    for (const connection of connections) {
+      const source = nodePositions.get(connection.source);
+      const target = nodePositions.get(connection.target);
+      if (source && target) {
+        connection.restDistance = contextualRestDistance(source, target);
+      }
+    }
+    contextualUnrenderedMotion = 0;
+    renderNodePositions();
+    startSimulation();
+  };
+
+  const contextualSimulationCanRun = (): boolean =>
+    contextualRelationships &&
+    !document.hidden &&
+    !reducedMotionQuery.matches &&
+    root.dataset.view !== "list" &&
+    root.isConnected;
+
+  const stepContextualSimulation = (render = true): number => {
+    const pinnedNodeId = nodeDrag?.nodeId;
+
+    for (const connection of connections) {
+      const source = nodePositions.get(connection.source);
+      const target = nodePositions.get(connection.target);
+      if (!source || !target) {
+        continue;
+      }
+      const sourceCenterX = source.x + source.width / 2;
+      const sourceCenterY = source.y + source.height / 2;
+      const targetCenterX = target.x + target.width / 2;
+      const targetCenterY = target.y + target.height / 2;
+      const deltaX = targetCenterX - sourceCenterX;
+      const deltaY = targetCenterY - sourceCenterY;
+      const distance = Math.hypot(deltaX, deltaY) || 1;
+      const extension = distance - connection.restDistance;
+      const force = extension * 0.0042;
+      const forceX = (deltaX / distance) * force;
+      const forceY = (deltaY / distance) * force;
+      if (connection.source !== pinnedNodeId) {
+        source.velocityX += forceX;
+        source.velocityY += forceY;
+      }
+      if (connection.target !== pinnedNodeId) {
+        target.velocityX -= forceX;
+        target.velocityY -= forceY;
+      }
+    }
+
+    const entries = [...nodePositions.entries()];
+    const repulsionRange = 620;
+    for (let index = 0; index < entries.length; index += 1) {
+      const firstEntry = entries[index];
+      if (!firstEntry) {
+        continue;
+      }
+      const [firstId, first] = firstEntry;
+      for (
+        let comparisonIndex = index + 1;
+        comparisonIndex < entries.length;
+        comparisonIndex += 1
+      ) {
+        const secondEntry = entries[comparisonIndex];
+        if (!secondEntry) {
+          continue;
+        }
+        const [secondId, second] = secondEntry;
+        let deltaX =
+          second.x + second.width / 2 - (first.x + first.width / 2);
+        let deltaY =
+          second.y + second.height / 2 - (first.y + first.height / 2);
+        let distance = Math.hypot(deltaX, deltaY);
+        if (distance < 0.001) {
+          const angle = ((index * 37 + comparisonIndex * 61) % 360) *
+            (Math.PI / 180);
+          deltaX = Math.cos(angle);
+          deltaY = Math.sin(angle);
+          distance = 1;
+        }
+
+        if (distance < repulsionRange) {
+          const repulsion =
+            ((repulsionRange - distance) / repulsionRange) *
+            0.32 *
+            contextualRepulsionMultiplier;
+          const forceX = (deltaX / distance) * repulsion;
+          const forceY = (deltaY / distance) * repulsion;
+          if (firstId !== pinnedNodeId) {
+            first.velocityX -= forceX;
+            first.velocityY -= forceY;
+          }
+          if (secondId !== pinnedNodeId) {
+            second.velocityX += forceX;
+            second.velocityY += forceY;
+          }
+        }
+
+        const overlapX =
+          (first.width + second.width) / 2 + 28 - Math.abs(deltaX);
+        const overlapY =
+          (first.height + second.height) / 2 + 28 - Math.abs(deltaY);
+        if (overlapX <= 0 || overlapY <= 0) {
+          continue;
+        }
+        if (overlapX < overlapY) {
+          const force = Math.sign(deltaX || 1) * overlapX * 0.024;
+          if (firstId !== pinnedNodeId) {
+            first.velocityX -= force;
+          }
+          if (secondId !== pinnedNodeId) {
+            second.velocityX += force;
+          }
+        } else {
+          const force = Math.sign(deltaY || 1) * overlapY * 0.024;
+          if (firstId !== pinnedNodeId) {
+            first.velocityY -= force;
+          }
+          if (secondId !== pinnedNodeId) {
+            second.velocityY += force;
+          }
+        }
+      }
+    }
+
+    const graphCenterX = graphWidth / 2;
+    const graphCenterY = graphHeight / 2;
+    let maximumMovement = 0;
+    for (const [nodeId, position] of nodePositions) {
+      if (nodeId === pinnedNodeId) {
+        position.velocityX = 0;
+        position.velocityY = 0;
+        continue;
+      }
+      const centerX = position.x + position.width / 2;
+      const centerY = position.y + position.height / 2;
+      position.velocityX += (graphCenterX - centerX) * 0.00055;
+      position.velocityY += (graphCenterY - centerY) * 0.00055;
+      if (chronologyAnchored) {
+        const anchorCenterY = chronologyAnchorCentersY.get(nodeId);
+        if (anchorCenterY !== undefined) {
+          position.velocityY += (anchorCenterY - centerY) * 0.0011;
+        }
+      }
+      position.velocityX = clamp(position.velocityX * 0.86, -12, 12);
+      position.velocityY = clamp(position.velocityY * 0.86, -12, 12);
+      position.x += position.velocityX;
+      position.y += position.velocityY;
+      if (chronologyAnchored) {
+        const anchorCenterY = chronologyAnchorCentersY.get(nodeId);
+        if (anchorCenterY !== undefined) {
+          position.y = anchorCenterY - position.height / 2;
+          position.velocityY = 0;
+        }
+      }
+      maximumMovement = Math.max(
+        maximumMovement,
+        Math.hypot(position.velocityX, position.velocityY),
+      );
+    }
+
+    if (render) {
+      contextualUnrenderedMotion += maximumMovement;
+      if (contextualUnrenderedMotion >= 0.08) {
+        contextualUnrenderedMotion = 0;
+        renderNodePositions();
+      }
+    }
+    return maximumMovement;
+  };
+
+  const warmContextualLayout = (): void => {
+    if (contextualLayoutWarmed) {
+      return;
+    }
+    contextualLayoutWarmed = true;
+    for (let tick = 0; tick < 180; tick += 1) {
+      stepContextualSimulation(false);
+    }
+    contextualUnrenderedMotion = 0;
+    renderNodePositions();
+  };
+
   const runSimulation = (): void => {
     simulationFrame = 0;
+    if (contextualRelationships) {
+      if (!contextualSimulationCanRun()) {
+        return;
+      }
+      stepContextualSimulation();
+      simulationFrame = requestAnimationFrame(runSimulation);
+      return;
+    }
     simulationTicks += 1;
     const pinnedNodeId = nodeDrag?.nodeId ?? simulationAnchorId;
 
@@ -492,12 +744,33 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   };
 
   const startSimulation = (anchorId?: string): void => {
-    if (anchorId) {
+    if (anchorId && !contextualRelationships) {
       simulationAnchorId = anchorId;
+    }
+    if (contextualRelationships) {
+      if (!contextualSimulationCanRun()) {
+        return;
+      }
+      warmContextualLayout();
     }
     if (!simulationFrame) {
       simulationTicks = 0;
       simulationFrame = requestAnimationFrame(runSimulation);
+    }
+  };
+
+  const syncContextualSimulation = (): void => {
+    if (!contextualRelationships) {
+      return;
+    }
+    simulationAnchorId = undefined;
+    if (contextualSimulationCanRun()) {
+      startSimulation();
+      return;
+    }
+    if (simulationFrame) {
+      cancelAnimationFrame(simulationFrame);
+      simulationFrame = 0;
     }
   };
 
@@ -980,16 +1253,81 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   });
 
   fitButton.addEventListener("click", fit);
+  for (const image of root.querySelectorAll<HTMLImageElement>(
+    ".kg-node__thumbnail",
+  )) {
+    image.addEventListener(
+      "error",
+      () => {
+        image
+          .closest<HTMLElement>("[data-knowledge-node]")
+          ?.removeAttribute("data-has-thumbnail");
+      },
+      { once: true },
+    );
+  }
+  thumbnailToggle?.addEventListener("click", () => {
+    const showThumbnails =
+      thumbnailToggle.getAttribute("aria-pressed") !== "true";
+    if (showThumbnails) {
+      for (const image of root.querySelectorAll<HTMLImageElement>(
+        ".kg-node__thumbnail[data-thumbnail-src]",
+      )) {
+        const source = image.dataset.thumbnailSrc;
+        if (source && !image.hasAttribute("src")) {
+          image.src = source;
+        }
+      }
+    }
+    root.dataset.nodeDisplay = showThumbnails ? "thumbnail" : "text";
+    thumbnailToggle.setAttribute(
+      "aria-pressed",
+      String(showThumbnails),
+    );
+    const label = showThumbnails ? ui.showText : ui.showThumbnails;
+    thumbnailToggle.setAttribute("aria-label", label);
+    thumbnailToggle.title = label;
+  });
+  settings?.addEventListener("toggle", () => {
+    settingsSummary?.setAttribute("aria-expanded", String(settings.open));
+  });
+  settings?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !settings.open) {
+      return;
+    }
+    event.preventDefault();
+    settings.open = false;
+    settingsSummary?.focus({ preventScroll: true });
+  });
+  nodeSizeControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(nodeSizeControl.value), 70, 150);
+    const label = `${Math.round(percentage)}%`;
+    nodeSizeOutput && (nodeSizeOutput.value = label);
+    nodeSizeControl.setAttribute("aria-valuetext", label);
+    applyNodeScale(percentage / 100);
+  });
+  repulsionControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(repulsionControl.value), 25, 200);
+    contextualRepulsionMultiplier = percentage / 100;
+    const label = `${contextualRepulsionMultiplier.toFixed(2)}×`;
+    repulsionOutput && (repulsionOutput.value = label);
+    repulsionControl.setAttribute("aria-valuetext", label);
+    startSimulation();
+  });
   viewButton.addEventListener("click", () => {
     const showList = root.dataset.view !== "list";
     clearSelection();
     root.dataset.view = showList ? "list" : "map";
     viewButton.setAttribute("aria-pressed", String(showList));
     viewButton.textContent = showList ? ui.map : ui.list;
+    syncContextualSimulation();
     if (!showList) {
       requestAnimationFrame(fit);
     }
   });
+
+  document.addEventListener("visibilitychange", syncContextualSimulation);
+  reducedMotionQuery.addEventListener("change", syncContextualSimulation);
 
   viewport.addEventListener(
     "wheel",
@@ -1181,6 +1519,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   root.dataset.enhanced = "true";
   updateEdges();
+  syncContextualSimulation();
   const fitAfterLayout = (): void => {
     requestAnimationFrame(() => requestAnimationFrame(fit));
   };

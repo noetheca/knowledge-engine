@@ -16,6 +16,14 @@ This bootstrap release intentionally keeps the package small:
 Astro is a peer dependency. Domain repositories own their content and thin
 site configuration; this repository owns shared behavior.
 
+`KnowledgeGraph.astro` supports both prerequisite maps and contextual maps.
+Contextual consumers can pass `chronology` anchors for a weak old-to-new
+vertical ordering, `contextFacts` for domain-specific inspector metadata, and
+`thumbnails` for an optional media view. Setting `controls` enables the shared
+text/thumbnail toggle plus node-size and repulsion controls. The browser layer
+keeps contextual graphs simulated while visible and preserves the server-side
+settled layout as their stable starting point.
+
 Filesystem paths are build-time source locations, not knowledge identities.
 Consumers can use `createTranslationFileIndex()` to match framework content
 entries to the stable ID read from `concept.yaml`.

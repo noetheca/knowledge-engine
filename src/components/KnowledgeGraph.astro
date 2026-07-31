@@ -10,6 +10,11 @@ type KnowledgeGraphLabels = Partial<
   status?: Partial<UiStrings["graph"]["status"]>;
 };
 
+interface KnowledgeGraphContextFact {
+  label: string;
+  value: string;
+}
+
 interface Props {
   graph: KnowledgeGraphModel;
   title?: string;
@@ -17,6 +22,12 @@ interface Props {
   labels?: KnowledgeGraphLabels;
   relationshipMode?: "prerequisite" | "contextual";
   initialView?: "map" | "list" | "responsive";
+  chronology?: Readonly<Record<string, number>>;
+  thumbnails?: Readonly<Record<string, string>>;
+  contextFacts?: Readonly<
+    Record<string, readonly KnowledgeGraphContextFact[]>
+  >;
+  controls?: boolean;
 }
 
 const {
@@ -26,6 +37,10 @@ const {
   labels,
   relationshipMode = "prerequisite",
   initialView = "map",
+  chronology,
+  thumbnails = {},
+  contextFacts = {},
+  controls = false,
 } = Astro.props;
 const defaultUi = getUiStrings(locale);
 const ui = {
@@ -39,13 +54,20 @@ const ui = {
     },
   },
 };
-const layout = layoutKnowledgeGraph(graph);
+const layout = layoutKnowledgeGraph(graph, {
+  strategy: relationshipMode === "contextual" ? "contextual" : "layered",
+  chronology,
+});
+const hasChronology = Object.values(chronology ?? {}).some(Number.isFinite);
 const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 const positionsById = new Map(layout.nodes.map((node) => [node.id, node]));
 const hasPrerequisiteEdges = graph.edges.some(
   ({ kind }) => kind === "prerequisite",
 );
 const hasRelatedEdges = graph.edges.some(({ kind }) => kind === "related");
+const hasThumbnails = graph.nodes.some(
+  ({ id }) => Boolean(thumbnails[id]?.trim()),
+);
 const resolveNodes = (ids: string[]) =>
   ids.flatMap((id) => {
     const node = nodesById.get(id);
@@ -60,6 +82,7 @@ const statusLabels = ui.graph.status;
   data-locale={locale}
   data-initial-view={initialView}
   data-relationship-mode={relationshipMode}
+  data-chronology-axis={hasChronology ? "y" : undefined}
   data-ui={JSON.stringify(ui.graph)}
   data-view={initialView === "list" ? "list" : "map"}
   aria-label={title}
@@ -75,6 +98,82 @@ const statusLabels = ui.graph.status;
         {ui.graph.list}
       </button>
       <span class="kg-toolbar__hint">{ui.graph.interactionHint}</span>
+      {
+        controls && (
+          <div class="kg-toolbar__controls">
+            {hasThumbnails && (
+              <button
+                class="kg-control-icon kg-thumbnail-toggle"
+                type="button"
+                data-graph-thumbnail-toggle
+                aria-label={ui.graph.showThumbnails}
+                aria-pressed="false"
+                title={ui.graph.showThumbnails}
+              >
+                <svg
+                  class="kg-control-icon__graphic kg-control-icon__graphic--thumbnail"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="8.5" cy="9" r="1.5" />
+                  <path d="m5 17 4.5-4 3.25 3 2.75-2.5L19 17" />
+                </svg>
+                <svg
+                  class="kg-control-icon__graphic kg-control-icon__graphic--text"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M5 6h14M12 6v12M8.5 18h7" />
+                </svg>
+              </button>
+            )}
+            <details class="kg-settings" data-graph-settings>
+              <summary
+                class="kg-control-icon"
+                aria-label={ui.graph.settings}
+                aria-expanded="false"
+                title={ui.graph.settings}
+              >
+                <svg
+                  class="kg-control-icon__graphic"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" />
+                </svg>
+              </summary>
+              <div class="kg-settings__panel">
+                <label>
+                  <span>{ui.graph.nodeSize}</span>
+                  <output data-node-size-output>100%</output>
+                  <input
+                    type="range"
+                    min="70"
+                    max="150"
+                    step="5"
+                    value="100"
+                    data-node-size-control
+                  />
+                </label>
+                <label>
+                  <span>{ui.graph.repulsionStrength}</span>
+                  <output data-repulsion-output>1.00×</output>
+                  <input
+                    type="range"
+                    min="25"
+                    max="200"
+                    step="5"
+                    value="100"
+                    data-repulsion-control
+                  />
+                </label>
+              </div>
+            </details>
+          </div>
+        )
+      }
     </div>
 
     <div class="kg-map-layout">
@@ -130,6 +229,7 @@ const statusLabels = ui.graph.status;
               graph.nodes.map((node) => {
                 const position = positionsById.get(node.id);
                 if (!position) return null;
+                const thumbnail = thumbnails[node.id]?.trim();
                 return (
                   <button
                     type="button"
@@ -137,9 +237,22 @@ const statusLabels = ui.graph.status;
                     data-knowledge-node={node.id}
                     data-knowledge-href={node.href}
                     data-status={node.status}
+                    data-has-thumbnail={thumbnail ? "true" : undefined}
+                    aria-label={node.title}
                     aria-pressed="false"
                     style={`left:${position.x}px;top:${position.y}px;width:${position.width}px;height:${position.height}px`}
                   >
+                    {thumbnail && (
+                      <img
+                        class="kg-node__thumbnail"
+                        data-thumbnail-src={thumbnail}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        referrerpolicy="no-referrer"
+                        draggable="false"
+                      />
+                    )}
                     <strong>{node.title}</strong>
                   </button>
                 );
@@ -272,6 +385,17 @@ const statusLabels = ui.graph.status;
           </header>
           <h2>{node.title}</h2>
           <p class="kg-detail__summary">{node.summary}</p>
+
+          {(contextFacts[node.id]?.length ?? 0) > 0 && (
+            <dl class="kg-detail__facts">
+              {contextFacts[node.id]?.map((fact) => (
+                <div>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
           {relationshipMode === "prerequisite" && (
             <>

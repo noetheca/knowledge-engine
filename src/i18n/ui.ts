@@ -18,6 +18,11 @@ export interface UiStrings {
     fit: string;
     list: string;
     map: string;
+    showThumbnails: string;
+    showText: string;
+    settings: string;
+    nodeSize: string;
+    repulsionStrength: string;
     interactionHint: string;
     viewportLabel: string;
     legend: string;
@@ -80,6 +85,11 @@ const stringsByLocale: Record<string, UiStrings> = {
       fit: "全体を表示",
       list: "一覧",
       map: "マップ",
+      showThumbnails: "ノードをサムネイル表示に切り替える",
+      showText: "ノードを文字表示に切り替える",
+      settings: "グラフ設定",
+      nodeSize: "ノードサイズ",
+      repulsionStrength: "反発の強さ",
       interactionHint: "背景をドラッグで移動・ノードは直接ドラッグ",
       viewportLabel: "前提知識を上から下へ示す知識マップ",
       legend: "実線は「前提知識 → 次に学ぶ知識」を示します",
@@ -140,6 +150,11 @@ const stringsByLocale: Record<string, UiStrings> = {
       fit: "Fit all",
       list: "List",
       map: "Map",
+      showThumbnails: "Show node thumbnails",
+      showText: "Show node text",
+      settings: "Graph settings",
+      nodeSize: "Node size",
+      repulsionStrength: "Repulsion strength",
       interactionHint: "Drag the canvas to move; drag nodes directly",
       viewportLabel: "Knowledge map ordered from prerequisites to later concepts",
       legend: "Solid lines show “prerequisite → next concept”",

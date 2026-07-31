@@ -124,3 +124,124 @@ test("wraps a large root layer into a compact grid", () => {
   assert.equal(distinctRows.size, 7);
   assert.equal(layout.width, 2032);
 });
+
+test("settles contextual graphs into a deterministic organic layout", () => {
+  const concepts = Array.from({ length: 49 }, (_, index) =>
+    node(`node-${String(index).padStart(2, "0")}`, {
+      related:
+        index < 44
+          ? [
+              `node-${String((index + 1) % 44).padStart(2, "0")}`,
+              ...(index < 19
+                ? [`node-${String((index + 7) % 44).padStart(2, "0")}`]
+                : []),
+            ]
+          : index === 44
+            ? ["node-45"]
+          : [],
+    }),
+  );
+  const graph = createKnowledgeGraphModel(concepts);
+  const first = layoutKnowledgeGraph(graph, { strategy: "contextual" });
+  const second = layoutKnowledgeGraph(graph, { strategy: "contextual" });
+  const reversed = layoutKnowledgeGraph(
+    createKnowledgeGraphModel(concepts.toReversed()),
+    { strategy: "contextual" },
+  );
+
+  assert.deepEqual(first, second);
+  assert.deepEqual(
+    first.nodes
+      .map(({ id, x, y }) => ({ id, x, y }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    reversed.nodes
+      .map(({ id, x, y }) => ({ id, x, y }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
+  assert.equal(first.nodes.length, 49);
+  assert.equal(first.edges.length, 64);
+  assert.ok(first.width > 0 && first.height > 0);
+
+  const distinctX = new Set(first.nodes.map(({ x }) => x));
+  const distinctY = new Set(first.nodes.map(({ y }) => y));
+  assert.ok(distinctX.size > 20);
+  assert.ok(distinctY.size > 20);
+
+  for (let index = 0; index < first.nodes.length; index += 1) {
+    const left = first.nodes[index];
+    assert.ok(left);
+    assert.ok(left.x >= 0 && left.y >= 0);
+    assert.ok(left.x + left.width <= first.width);
+    assert.ok(left.y + left.height <= first.height);
+    for (
+      let comparisonIndex = index + 1;
+      comparisonIndex < first.nodes.length;
+      comparisonIndex += 1
+    ) {
+      const right = first.nodes[comparisonIndex];
+      assert.ok(right);
+      const overlapX =
+        Math.min(left.x + left.width, right.x + right.width) -
+        Math.max(left.x, right.x);
+      const overlapY =
+        Math.min(left.y + left.height, right.y + right.height) -
+        Math.max(left.y, right.y);
+      assert.ok(overlapX <= 1 || overlapY <= 1);
+    }
+  }
+});
+
+test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
+  const graph = createKnowledgeGraphModel([
+    node("classical", { related: ["modern"] }),
+    node("modern", { related: ["classical", "postmodern"] }),
+    node("postmodern", { related: ["modern"] }),
+    node("unranked", { related: ["modern"] }),
+  ]);
+  const options = {
+    strategy: "contextual",
+    chronology: {
+      classical: 1750,
+      modern: 1900,
+      postmodern: 1970,
+    },
+  };
+  const first = layoutKnowledgeGraph(graph, options);
+  const second = layoutKnowledgeGraph(graph, options);
+  const positions = new Map(first.nodes.map((item) => [item.id, item]));
+  const classicalY = positions.get("classical")?.y ?? 0;
+  const modernY = positions.get("modern")?.y ?? 0;
+  const postmodernY = positions.get("postmodern")?.y ?? 0;
+  const unrankedY = positions.get("unranked")?.y ?? 0;
+
+  assert.deepEqual(first, second);
+  assert.ok(classicalY < modernY);
+  assert.ok(modernY < postmodernY);
+  assert.ok(postmodernY < unrankedY);
+});
+
+test("does not invert chronology across a dense contextual graph", () => {
+  const concepts = Array.from({ length: 43 }, (_, index) =>
+    node(`dated-${String(index).padStart(2, "0")}`, {
+      related:
+        index + 1 < 43
+          ? [`dated-${String(index + 1).padStart(2, "0")}`]
+          : [],
+    }),
+  );
+  const graph = createKnowledgeGraphModel(concepts);
+  const chronology = Object.fromEntries(
+    concepts.map(({ id }, index) => [id, 1950 + index]),
+  );
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology,
+  });
+  const ordered = [...layout.nodes].sort(
+    (left, right) => chronology[left.id] - chronology[right.id],
+  );
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    assert.ok(ordered[index - 1].y < ordered[index].y);
+  }
+});
