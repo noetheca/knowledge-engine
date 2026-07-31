@@ -179,11 +179,32 @@
 }
 
 .kg-viewport {
+  --kg-grid-coarse-offset-x: 0px;
+  --kg-grid-coarse-offset-y: 0px;
+  --kg-grid-coarse-spacing: 24px;
+  --kg-grid-fine-offset-x: 0px;
+  --kg-grid-fine-offset-y: 0px;
+  --kg-grid-fine-opacity: 0%;
+  --kg-grid-fine-spacing: 12px;
   background-color: var(--background);
   background-image:
+    radial-gradient(
+      circle,
+      color-mix(
+          in srgb,
+          var(--grid-line) var(--kg-grid-fine-opacity),
+          transparent
+        )
+        1.25px,
+      transparent 1.5px
+    ),
     radial-gradient(circle, var(--grid-line) 1.25px, transparent 1.5px);
-  background-position: 0 0;
-  background-size: 24px 24px;
+  background-position:
+    var(--kg-grid-fine-offset-x) var(--kg-grid-fine-offset-y),
+    var(--kg-grid-coarse-offset-x) var(--kg-grid-coarse-offset-y);
+  background-size:
+    var(--kg-grid-fine-spacing) var(--kg-grid-fine-spacing),
+    var(--kg-grid-coarse-spacing) var(--kg-grid-coarse-spacing);
   cursor: grab;
   overflow: hidden;
   position: relative;

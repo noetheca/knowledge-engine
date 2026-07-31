@@ -1,6 +1,8 @@
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2.4;
 const CAMERA_TRANSITION_DURATION_MS = 300;
+const GRID_BASE_SPACING = 24;
+const GRID_TARGET_SCREEN_SPACING = 24;
 
 import { getUiStrings } from "../i18n/ui.js";
 
@@ -59,6 +61,10 @@ interface ReaderRelation {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function positiveModulo(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 function initializeKnowledgeGraph(root: HTMLElement): void {
@@ -348,6 +354,49 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     world.style.transform =
       `translate(${transform.x}px, ${transform.y}px) ` +
       `scale(${transform.scale})`;
+    const gridLevel = Math.ceil(
+      Math.log2(
+        GRID_TARGET_SCREEN_SPACING /
+          (GRID_BASE_SPACING * transform.scale),
+      ),
+    );
+    const coarseGridSpacing =
+      GRID_BASE_SPACING * 2 ** gridLevel * transform.scale;
+    const fineGridSpacing = coarseGridSpacing / 2;
+    const fineGridOpacity = clamp(
+      (coarseGridSpacing - GRID_TARGET_SCREEN_SPACING) /
+        GRID_TARGET_SCREEN_SPACING,
+      0,
+      1,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-coarse-spacing",
+      `${coarseGridSpacing}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-fine-spacing",
+      `${fineGridSpacing}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-coarse-offset-x",
+      `${positiveModulo(transform.x, coarseGridSpacing)}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-coarse-offset-y",
+      `${positiveModulo(transform.y, coarseGridSpacing)}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-fine-offset-x",
+      `${positiveModulo(transform.x, fineGridSpacing)}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-fine-offset-y",
+      `${positiveModulo(transform.y, fineGridSpacing)}px`,
+    );
+    viewport.style.setProperty(
+      "--kg-grid-fine-opacity",
+      `${fineGridOpacity * 100}%`,
+    );
     scheduleInspectorPosition();
   };
 
