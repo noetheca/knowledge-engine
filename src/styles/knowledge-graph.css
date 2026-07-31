@@ -218,21 +218,17 @@
   transition: opacity 120ms ease, stroke-width 120ms ease;
 }
 
-.kg-edges path[data-edge-kind="prerequisite"][data-target-status="draft"] {
-  stroke-dasharray: 9 7;
+.kg-edges path[data-target-status="draft"]:not([data-edge-kind="related"]) {
+  stroke-dasharray: 1 6;
+  stroke-linecap: round;
   stroke-width: 2;
 }
 
 .kg-edges path[data-edge-kind="related"] {
   opacity: 0;
-  stroke-dasharray: 2 7;
+  stroke-dasharray: 10 5 2 5;
   stroke-linecap: round;
   stroke-width: 2;
-}
-
-.knowledge-graph[data-relationship-mode="contextual"] .kg-edges path[data-edge-kind="related"] {
-  opacity: 0.48;
-  stroke-dasharray: none;
 }
 
 .kg-edge-arrow {
@@ -255,18 +251,12 @@
   stroke-width: 5;
 }
 
-.knowledge-graph[data-selected-node] .kg-edges path.is-connected[data-edge-kind="prerequisite"][data-target-status="draft"] {
+.knowledge-graph[data-selected-node] .kg-edges path.is-connected[data-target-status="draft"]:not([data-edge-kind="related"]) {
   stroke-width: 2;
 }
 
 .knowledge-graph[data-selected-node] .kg-edges path[data-edge-kind="related"] {
   opacity: 0;
-}
-
-.knowledge-graph[data-relationship-mode="contextual"][data-selected-node]
-  .kg-edges
-  path[data-edge-kind="related"] {
-  opacity: 0.22;
 }
 
 .knowledge-graph[data-selected-node] .kg-edges path[data-edge-kind="related"].is-connected {
@@ -342,7 +332,7 @@
 
 .kg-node[data-status="draft"],
 .kg-node[data-status="draft"]:active {
-  border-style: dashed;
+  border-style: dotted;
   box-shadow: none;
   transform: none;
 }
@@ -402,12 +392,15 @@
 }
 
 .kg-legend__sample[data-edge-kind="related"] {
-  border-top-style: dotted;
-  border-top-width: 2px;
-}
-
-.knowledge-graph[data-relationship-mode="contextual"] .kg-legend__sample[data-edge-kind="related"] {
-  border-top-style: solid;
+  background: repeating-linear-gradient(
+    to right,
+    var(--text) 0 10px,
+    transparent 10px 15px,
+    var(--text) 15px 17px,
+    transparent 17px 22px
+  );
+  border: 0;
+  height: 2px;
 }
 
 .kg-inspector {
@@ -791,7 +784,7 @@
 
 .kg-reader-nav-section[data-direction="related"] {
   grid-column: 1 / -1;
-  grid-row: 1;
+  grid-row: 2;
   text-align: center;
 }
 
@@ -879,11 +872,6 @@
   grid-column: 2;
   grid-row: 1;
   padding-top: calc(0.82rem + 2rem);
-}
-
-.knowledge-graph[data-relationship-mode="contextual"] .kg-reader-actions {
-  grid-row: 2;
-  padding-top: 0;
 }
 
 .kg-reader-close,
@@ -1046,7 +1034,7 @@
 
   .kg-reader-nav-section[data-direction="related"] {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 4;
   }
 
   .kg-reader-nav-links {

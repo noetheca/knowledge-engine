@@ -107,7 +107,7 @@ function createLayoutEdges(
       x: sourceCenter.x + direction.x * (sourceRadius + 4),
       y: sourceCenter.y + direction.y * (sourceRadius + 4),
     };
-    const targetGap = edge.kind === "prerequisite" ? 14 : 4;
+    const targetGap = edge.kind === "related" ? 4 : 14;
     const targetPoint = {
       x: targetCenter.x - direction.x * (targetRadius + targetGap),
       y: targetCenter.y - direction.y * (targetRadius + targetGap),
@@ -134,8 +134,10 @@ function settleContextualNodes(
     simulationNodes.map((node) => [node.id, node]),
   );
   const activeEdges = edges.filter(
-    ({ source, target }) =>
-      simulatedById.has(source) && simulatedById.has(target),
+    ({ source, target, kind }) =>
+      kind !== "related" &&
+      simulatedById.has(source) &&
+      simulatedById.has(target),
   );
   const linkDistance = Math.max(nodeWidth * 1.45, nodeHeight * 2.35);
   const rankedNodes = simulationNodes.flatMap((node) => {
@@ -181,6 +183,12 @@ function settleContextualNodes(
       source.velocityY += forceY;
       target.velocityX -= forceX;
       target.velocityY -= forceY;
+      if (edge.kind === "contextual") {
+        const verticalError = dy - linkDistance * 0.72;
+        const verticalForce = verticalError * 0.007 * cooling;
+        source.velocityY += verticalForce;
+        target.velocityY -= verticalForce;
+      }
     }
 
     for (let index = 0; index < simulationNodes.length; index += 1) {
@@ -361,9 +369,9 @@ function layoutContextualKnowledgeGraph(
   });
   const radiusStep = Math.max(nodeWidth, nodeHeight) * 0.74;
   const collisionGap = 32;
-  const orderedEdges = [...graph.edges].sort((left, right) =>
-    compareText(left.id, right.id),
-  );
+  const orderedEdges = graph.edges
+    .filter(({ kind }) => kind !== "related")
+    .sort((left, right) => compareText(left.id, right.id));
   const simulationNodes: SimulationNode[] = [];
   const simulatedById = new Map<string, SimulationNode>();
 

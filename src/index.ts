@@ -2,8 +2,10 @@ export { loadKnowledgeBase } from "./load.js";
 export { createManifest } from "./manifest.js";
 export {
   createKnowledgeGraphModel,
+  type KnowledgeGraphContextRelationInput,
   type KnowledgeGraphEdge,
   type KnowledgeGraphModel,
+  type KnowledgeGraphModelOptions,
   type KnowledgeGraphNode,
   type KnowledgeGraphNodeInput,
 } from "./graph/model.js";

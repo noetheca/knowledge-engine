@@ -37,6 +37,7 @@ interface NodeDrag {
 interface GraphConnection {
   source: string;
   target: string;
+  directional: boolean;
   restX: number;
   restY: number;
   restDistance: number;
@@ -194,6 +195,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   for (const edge of root.querySelectorAll<SVGPathElement>(
     "[data-knowledge-edge]",
   )) {
+    if (edge.dataset.edgeKind === "related") {
+      continue;
+    }
     const sourceId = edge.dataset.edgeSource;
     const targetId = edge.dataset.edgeTarget;
     const source = sourceId ? nodePositions.get(sourceId) : undefined;
@@ -204,6 +208,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     connections.push({
       source: sourceId,
       target: targetId,
+      directional: edge.dataset.edgeKind === "contextual",
       restX: target.x - source.x,
       restY: target.y - source.y,
       restDistance: contextualRestDistance(source, target),
@@ -501,6 +506,17 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (connection.target !== pinnedNodeId) {
         target.velocityX -= forceX;
         target.velocityY -= forceY;
+      }
+      if (connection.directional) {
+        const verticalError =
+          targetCenterY - sourceCenterY - connection.restDistance * 0.72;
+        const verticalForce = verticalError * 0.0028;
+        if (connection.source !== pinnedNodeId) {
+          source.velocityY += verticalForce;
+        }
+        if (connection.target !== pinnedNodeId) {
+          target.velocityY -= verticalForce;
+        }
       }
     }
 
@@ -860,19 +876,6 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   };
 
   const renderReaderNavigation = (nodeId: string): void => {
-    if (contextualRelationships) {
-      const related = relationIds(
-        nodeId,
-        "[data-knowledge-related]",
-      ).flatMap((relationId) => {
-        const relation = resolveReaderRelation(relationId);
-        return relation ? [relation] : [];
-      });
-      readerNavigation.replaceChildren(
-        createReaderNavSection(ui.related, related, "related"),
-      );
-      return;
-    }
     const previous = relationIds(
       nodeId,
       "[data-knowledge-previous]",
@@ -887,10 +890,25 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       const relation = resolveReaderRelation(relationId);
       return relation ? [relation] : [];
     });
-    readerNavigation.replaceChildren(
+    const sections = [
       createReaderNavSection(ui.previous, previous, "previous"),
       createReaderNavSection(ui.next, next, "next"),
-    );
+    ];
+    if (contextualRelationships) {
+      const related = relationIds(
+        nodeId,
+        "[data-knowledge-related]",
+      ).flatMap((relationId) => {
+        const relation = resolveReaderRelation(relationId);
+        return relation ? [relation] : [];
+      });
+      if (related.length > 0) {
+        sections.push(
+          createReaderNavSection(ui.related, related, "related"),
+        );
+      }
+    }
+    readerNavigation.replaceChildren(...sections);
   };
 
   const syncReaderModality = (): void => {

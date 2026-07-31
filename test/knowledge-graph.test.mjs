@@ -71,6 +71,44 @@ test("creates one undirected edge for a related pair", () => {
   );
 });
 
+test("creates directed contextual relations and suppresses duplicate related pairs", () => {
+  const graph = createKnowledgeGraphModel(
+    [
+      node("earlier", { related: ["later"] }),
+      node("later"),
+    ],
+    {
+      contextualRelations: [{ source: "earlier", target: "later" }],
+    },
+  );
+
+  assert.deepEqual(
+    graph.edges.map(({ source, target, kind }) => [source, target, kind]),
+    [["earlier", "later", "contextual"]],
+  );
+  assert.deepEqual(
+    graph.nodes.map(({ predecessors, successors, related }) => ({
+      predecessors,
+      successors,
+      related,
+    })),
+    [
+      { predecessors: [], successors: ["later"], related: [] },
+      { predecessors: ["earlier"], successors: [], related: [] },
+    ],
+  );
+});
+
+test("rejects contextual relations with missing nodes", () => {
+  assert.throws(
+    () =>
+      createKnowledgeGraphModel([node("known")], {
+        contextualRelations: [{ source: "known", target: "missing" }],
+      }),
+    /references a missing node/,
+  );
+});
+
 test("rejects duplicate nodes and missing prerequisites", () => {
   assert.throws(
     () => createKnowledgeGraphModel([node("same"), node("same")]),
@@ -189,6 +227,35 @@ test("settles contextual graphs into a deterministic organic layout", () => {
       assert.ok(overlapX <= 1 || overlapY <= 1);
     }
   }
+});
+
+test("does not use selection-only related edges as contextual forces", () => {
+  const inputs = [
+    node("left", { related: ["right"] }),
+    node("right"),
+  ];
+  const withRelated = layoutKnowledgeGraph(createKnowledgeGraphModel(inputs), {
+    strategy: "contextual",
+  });
+  const withoutRelated = layoutKnowledgeGraph(
+    createKnowledgeGraphModel(inputs.map((entry) => ({ ...entry, related: [] }))),
+    { strategy: "contextual" },
+  );
+
+  assert.deepEqual(withRelated.nodes, withoutRelated.nodes);
+  assert.equal(withRelated.edges.length, 1);
+  assert.equal(withoutRelated.edges.length, 0);
+});
+
+test("places a directed contextual target below its source", () => {
+  const graph = createKnowledgeGraphModel(
+    [node("source"), node("target")],
+    { contextualRelations: [{ source: "source", target: "target" }] },
+  );
+  const layout = layoutKnowledgeGraph(graph, { strategy: "contextual" });
+  const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
+
+  assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
 });
 
 test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
