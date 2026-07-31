@@ -6,13 +6,11 @@ import "../styles/knowledge-graph.css";
 interface Props {
   graph: KnowledgeGraphModel;
   title?: string;
-  description?: string;
 }
 
 const {
   graph,
   title = "Knowledge Map",
-  description = "前提知識から、次に学ぶ知識へ進む地図です。",
 } = Astro.props;
 const layout = layoutKnowledgeGraph(graph);
 const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
@@ -33,20 +31,8 @@ const statusLabels = {
   class="knowledge-graph"
   data-knowledge-graph
   data-view="map"
-  aria-labelledby="knowledge-graph-title"
+  aria-label={title}
 >
-  <header class="kg-heading">
-    <div>
-      <p class="kg-eyebrow">Mathematics / Knowledge Map</p>
-      <h1 id="knowledge-graph-title">{title}</h1>
-      <p>{description}</p>
-    </div>
-    <p class="kg-count" aria-label={`${graph.nodes.length}件の知識`}>
-      <strong>{String(graph.nodes.length).padStart(2, "0")}</strong>
-      <span>knowledge</span>
-    </p>
-  </header>
-
   <div class="kg-shell">
     <div class="kg-toolbar" aria-label="知識マップの表示操作">
       <button type="button" data-graph-fit>全体を表示</button>
@@ -140,15 +126,9 @@ const statusLabels = {
         data-graph-inspector
         aria-live="polite"
         aria-label="選択した知識の詳細"
-      >
-        <div class="kg-empty-state">
-          <p class="kg-eyebrow">Inspector</p>
-          <h2>知識を選択</h2>
-          <p>
-            マップ上のノードを選ぶと、概要・前提知識・次につながる知識を確認できます。
-          </p>
-        </div>
-      </aside>
+        aria-hidden="true"
+        tabindex="-1"
+      ></aside>
     </div>
 
     <section class="kg-list-view" aria-labelledby="knowledge-list-title">
@@ -176,8 +156,20 @@ const statusLabels = {
     graph.nodes.map((node) => (
       <template data-knowledge-detail={node.id}>
         <article class="kg-detail">
-          <p class="kg-eyebrow">Selected knowledge</p>
-          <p class="kg-detail__status">{statusLabels[node.status]}</p>
+          <header class="kg-detail__header">
+            <div>
+              <p class="kg-eyebrow">Selected knowledge</p>
+              <p class="kg-detail__status">{statusLabels[node.status]}</p>
+            </div>
+            <button
+              class="kg-inspector-close"
+              type="button"
+              data-close-inspector
+              aria-label="詳細を閉じる"
+            >
+              閉じる
+            </button>
+          </header>
           <h2>{node.title}</h2>
           <p class="kg-detail__summary">{node.summary}</p>
 

@@ -72,19 +72,43 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (bounds.width === 0 || bounds.height === 0) {
       return;
     }
-    const inset = bounds.width < 640 ? 24 : 48;
+    const horizontalInset = bounds.width < 640 ? 24 : 48;
+    const topInset = bounds.width < 640 ? 148 : 128;
+    const bottomInset = bounds.width < 640 ? 32 : 48;
+    const availableHeight = Math.max(
+      1,
+      bounds.height - topInset - bottomInset,
+    );
     transform.scale = clamp(
       Math.min(
-        (bounds.width - inset) / graphWidth,
-        (bounds.height - inset) / graphHeight,
+        (bounds.width - horizontalInset) / graphWidth,
+        availableHeight / graphHeight,
         1.25,
       ),
       MIN_SCALE,
       MAX_SCALE,
     );
     transform.x = (bounds.width - graphWidth * transform.scale) / 2;
-    transform.y = (bounds.height - graphHeight * transform.scale) / 2;
+    transform.y =
+      topInset + (availableHeight - graphHeight * transform.scale) / 2;
     renderTransform();
+  };
+
+  const clearSelection = (): void => {
+    for (const node of root.querySelectorAll<HTMLButtonElement>(
+      "[data-knowledge-node]",
+    )) {
+      node.setAttribute("aria-pressed", "false");
+      node.removeAttribute("data-selected");
+    }
+    for (const edge of root.querySelectorAll<SVGPathElement>(
+      "[data-knowledge-edge]",
+    )) {
+      edge.classList.remove("is-connected", "is-incoming");
+    }
+    inspector.setAttribute("aria-hidden", "true");
+    inspector.replaceChildren();
+    delete root.dataset.selectedNode;
   };
 
   const selectNode = (nodeId: string): void => {
@@ -116,12 +140,18 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     }
 
     inspector.replaceChildren(template.content.cloneNode(true));
+    inspector.setAttribute("aria-hidden", "false");
     root.dataset.selectedNode = nodeId;
+    inspector.focus({ preventScroll: true });
   };
 
   root.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
+      return;
+    }
+    if (target.closest("[data-close-inspector]")) {
+      clearSelection();
       return;
     }
     const node = target.closest<HTMLElement>("[data-knowledge-node]");
@@ -132,10 +162,16 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       selectNode(nodeId);
     }
   });
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && root.dataset.selectedNode) {
+      clearSelection();
+    }
+  });
 
   fitButton.addEventListener("click", fit);
   viewButton.addEventListener("click", () => {
     const showList = root.dataset.view !== "list";
+    clearSelection();
     root.dataset.view = showList ? "list" : "map";
     viewButton.setAttribute("aria-pressed", String(showList));
     viewButton.textContent = showList ? "マップ" : "一覧";
