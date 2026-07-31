@@ -115,7 +115,7 @@ button:focus-visible {
   font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
-  padding-inline: 0.15rem;
+  padding-inline: clamp(0.75rem, 1.4vw, 1.25rem);
   text-decoration: none;
 }
 
@@ -172,7 +172,9 @@ button:focus-visible {
 
 .language-menu[open] .language-toggle {
   background: var(--text);
+  box-shadow: none;
   color: var(--background);
+  transform: translateY(3px);
 }
 
 .language-menu__list {
