@@ -125,16 +125,48 @@ export function layoutKnowledgeGraph(
     if (!source || !target) {
       throw new Error(`Cannot lay out graph edge "${edge.id}".`);
     }
-    const sourceX = source.x + source.width / 2;
-    const sourceY = source.y + source.height + 10;
-    const targetX = target.x + target.width / 2;
-    const targetY = target.y - 10;
-    const middleY = (sourceY + targetY) / 2;
+    const sourceCenter = {
+      x: source.x + source.width / 2,
+      y: source.y + source.height / 2,
+    };
+    const targetCenter = {
+      x: target.x + target.width / 2,
+      y: target.y + target.height / 2,
+    };
+    const dx = targetCenter.x - sourceCenter.x;
+    const dy = targetCenter.y - sourceCenter.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const direction = { x: dx / distance, y: dy / distance };
+    const sourceRadius = Math.min(
+      Math.abs(direction.x) > 0
+        ? source.width / 2 / Math.abs(direction.x)
+        : Number.POSITIVE_INFINITY,
+      Math.abs(direction.y) > 0
+        ? source.height / 2 / Math.abs(direction.y)
+        : Number.POSITIVE_INFINITY,
+    );
+    const targetRadius = Math.min(
+      Math.abs(direction.x) > 0
+        ? target.width / 2 / Math.abs(direction.x)
+        : Number.POSITIVE_INFINITY,
+      Math.abs(direction.y) > 0
+        ? target.height / 2 / Math.abs(direction.y)
+        : Number.POSITIVE_INFINITY,
+    );
+    const sourcePoint = {
+      x: sourceCenter.x + direction.x * (sourceRadius + 4),
+      y: sourceCenter.y + direction.y * (sourceRadius + 4),
+    };
+    const targetPoint = {
+      x: targetCenter.x - direction.x * (targetRadius + 14),
+      y: targetCenter.y - direction.y * (targetRadius + 14),
+    };
+    const middleY = (sourcePoint.y + targetPoint.y) / 2;
     return {
       ...edge,
       path:
-        `M ${sourceX} ${sourceY} ` +
-        `V ${middleY} H ${targetX} V ${targetY}`,
+        `M ${sourcePoint.x} ${sourcePoint.y} ` +
+        `V ${middleY} H ${targetPoint.x} V ${targetPoint.y}`,
     };
   });
 

@@ -12,6 +12,31 @@ interface PointerPosition {
   y: number;
 }
 
+interface NodePosition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface NodeDrag {
+  pointerId: number;
+  node: HTMLButtonElement;
+  nodeId: string;
+  startClientX: number;
+  startClientY: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
+}
+
+interface SafeArea {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -40,15 +65,181 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const transform: Transform = { x: 0, y: 0, scale: 1 };
   const pointers = new Map<number, PointerPosition>();
+  const nodeElements = [
+    ...root.querySelectorAll<HTMLButtonElement>("[data-knowledge-node]"),
+  ];
+  const nodePositions = new Map<string, NodePosition>();
+  for (const node of nodeElements) {
+    const nodeId = node.dataset.knowledgeNode;
+    if (!nodeId) {
+      continue;
+    }
+    nodePositions.set(nodeId, {
+      x: Number.parseFloat(node.style.left),
+      y: Number.parseFloat(node.style.top),
+      width: Number.parseFloat(node.style.width),
+      height: Number.parseFloat(node.style.height),
+    });
+  }
+
   let panAnchor: PointerPosition | undefined;
   let pinchDistance = 0;
   let pinchScale = 1;
   let pinchWorldPoint: PointerPosition | undefined;
+  let nodeDrag: NodeDrag | undefined;
+  let suppressNodeClickUntil = 0;
+  let inspectorPositionFrame = 0;
+
+  const getSafeArea = (): SafeArea => {
+    const bounds = viewport.getBoundingClientRect();
+    return {
+      top: bounds.width < 640 ? 148 : 128,
+      right: bounds.width < 640 ? 12 : 24,
+      bottom: bounds.width < 640 ? 24 : 36,
+      left: bounds.width < 640 ? 12 : 24,
+    };
+  };
+
+  const selectedNodeElement = (): HTMLButtonElement | undefined => {
+    const nodeId = root.dataset.selectedNode;
+    if (!nodeId) {
+      return undefined;
+    }
+    return nodeElements.find((node) => node.dataset.knowledgeNode === nodeId);
+  };
+
+  const positionInspector = (node: HTMLButtonElement): void => {
+    if (inspector.getAttribute("aria-hidden") === "true") {
+      return;
+    }
+
+    const viewportBounds = viewport.getBoundingClientRect();
+    const nodeBounds = node.getBoundingClientRect();
+    const inspectorBounds = inspector.getBoundingClientRect();
+    const safe = getSafeArea();
+    const gap = 20;
+    const bubbleWidth = inspectorBounds.width;
+    const bubbleHeight = inspectorBounds.height;
+    const nodeLeft = nodeBounds.left - viewportBounds.left;
+    const nodeTop = nodeBounds.top - viewportBounds.top;
+    const nodeRight = nodeBounds.right - viewportBounds.left;
+    const nodeBottom = nodeBounds.bottom - viewportBounds.top;
+    const nodeCenterX = (nodeLeft + nodeRight) / 2;
+    const nodeCenterY = (nodeTop + nodeBottom) / 2;
+    const maximumLeft = Math.max(
+      safe.left,
+      viewportBounds.width - safe.right - bubbleWidth,
+    );
+    const maximumTop = Math.max(
+      safe.top,
+      viewportBounds.height - safe.bottom - bubbleHeight,
+    );
+
+    let placement: "right" | "left" | "bottom" | "top";
+    let left: number;
+    let top: number;
+    let tailOffset: number;
+
+    const canPlaceRight =
+      nodeRight + gap + bubbleWidth <= viewportBounds.width - safe.right;
+    const canPlaceLeft = nodeLeft - gap - bubbleWidth >= safe.left;
+    const preferVertical = viewportBounds.width < 720;
+
+    if (!preferVertical && (canPlaceRight || !canPlaceLeft)) {
+      placement = "right";
+      left = clamp(nodeRight + gap, safe.left, maximumLeft);
+      top = clamp(nodeCenterY - bubbleHeight / 2, safe.top, maximumTop);
+      tailOffset = clamp(nodeCenterY - top, 24, bubbleHeight - 24);
+    } else if (!preferVertical && canPlaceLeft) {
+      placement = "left";
+      left = clamp(nodeLeft - gap - bubbleWidth, safe.left, maximumLeft);
+      top = clamp(nodeCenterY - bubbleHeight / 2, safe.top, maximumTop);
+      tailOffset = clamp(nodeCenterY - top, 24, bubbleHeight - 24);
+    } else {
+      const canPlaceBelow =
+        nodeBottom + gap + bubbleHeight <= viewportBounds.height - safe.bottom;
+      placement = canPlaceBelow ? "bottom" : "top";
+      left = clamp(nodeCenterX - bubbleWidth / 2, safe.left, maximumLeft);
+      top = canPlaceBelow
+        ? clamp(nodeBottom + gap, safe.top, maximumTop)
+        : clamp(nodeTop - gap - bubbleHeight, safe.top, maximumTop);
+      tailOffset = clamp(nodeCenterX - left, 24, bubbleWidth - 24);
+    }
+
+    inspector.style.left = `${left}px`;
+    inspector.style.top = `${top}px`;
+    inspector.style.setProperty("--kg-tail-offset", `${tailOffset}px`);
+    inspector.dataset.placement = placement;
+  };
+
+  const scheduleInspectorPosition = (): void => {
+    if (inspectorPositionFrame) {
+      cancelAnimationFrame(inspectorPositionFrame);
+    }
+    inspectorPositionFrame = requestAnimationFrame(() => {
+      inspectorPositionFrame = 0;
+      const node = selectedNodeElement();
+      if (node) {
+        positionInspector(node);
+      }
+    });
+  };
 
   const renderTransform = (): void => {
     world.style.transform =
       `translate(${transform.x}px, ${transform.y}px) ` +
       `scale(${transform.scale})`;
+    scheduleInspectorPosition();
+  };
+
+  const connectionPoint = (
+    from: NodePosition,
+    toward: NodePosition,
+    gap: number,
+  ): PointerPosition => {
+    const fromCenterX = from.x + from.width / 2;
+    const fromCenterY = from.y + from.height / 2;
+    const towardCenterX = toward.x + toward.width / 2;
+    const towardCenterY = toward.y + toward.height / 2;
+    const dx = towardCenterX - fromCenterX;
+    const dy = towardCenterY - fromCenterY;
+    const distance = Math.hypot(dx, dy) || 1;
+    const directionX = dx / distance;
+    const directionY = dy / distance;
+    const horizontalRadius =
+      Math.abs(directionX) > 0
+        ? from.width / 2 / Math.abs(directionX)
+        : Number.POSITIVE_INFINITY;
+    const verticalRadius =
+      Math.abs(directionY) > 0
+        ? from.height / 2 / Math.abs(directionY)
+        : Number.POSITIVE_INFINITY;
+    const radius = Math.min(horizontalRadius, verticalRadius);
+    return {
+      x: fromCenterX + directionX * (radius + gap),
+      y: fromCenterY + directionY * (radius + gap),
+    };
+  };
+
+  const updateEdges = (): void => {
+    for (const edge of root.querySelectorAll<SVGPathElement>(
+      "[data-knowledge-edge]",
+    )) {
+      const sourceId = edge.dataset.edgeSource;
+      const targetId = edge.dataset.edgeTarget;
+      const source = sourceId ? nodePositions.get(sourceId) : undefined;
+      const target = targetId ? nodePositions.get(targetId) : undefined;
+      if (!source || !target) {
+        continue;
+      }
+      const start = connectionPoint(source, target, 4);
+      const end = connectionPoint(target, source, 14);
+      const middleY = (start.y + end.y) / 2;
+      edge.setAttribute(
+        "d",
+        `M ${start.x} ${start.y} V ${middleY} H ${end.x} V ${end.y}`,
+      );
+    }
   };
 
   const zoomAt = (
@@ -72,32 +263,84 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (bounds.width === 0 || bounds.height === 0) {
       return;
     }
-    const horizontalInset = bounds.width < 640 ? 24 : 48;
-    const topInset = bounds.width < 640 ? 148 : 128;
-    const bottomInset = bounds.width < 640 ? 32 : 48;
+    const safe = getSafeArea();
+    const contentLeft = Math.min(
+      0,
+      ...[...nodePositions.values()].map((position) => position.x - 48),
+    );
+    const contentTop = Math.min(
+      0,
+      ...[...nodePositions.values()].map((position) => position.y - 48),
+    );
+    const contentRight = Math.max(
+      graphWidth,
+      ...[...nodePositions.values()].map(
+        (position) => position.x + position.width + 48,
+      ),
+    );
+    const contentBottom = Math.max(
+      graphHeight,
+      ...[...nodePositions.values()].map(
+        (position) => position.y + position.height + 48,
+      ),
+    );
+    const contentWidth = contentRight - contentLeft;
+    const contentHeight = contentBottom - contentTop;
+    const availableWidth = Math.max(
+      1,
+      bounds.width - safe.left - safe.right,
+    );
     const availableHeight = Math.max(
       1,
-      bounds.height - topInset - bottomInset,
+      bounds.height - safe.top - safe.bottom,
     );
     transform.scale = clamp(
       Math.min(
-        (bounds.width - horizontalInset) / graphWidth,
-        availableHeight / graphHeight,
+        availableWidth / contentWidth,
+        availableHeight / contentHeight,
         1.25,
       ),
       MIN_SCALE,
       MAX_SCALE,
     );
-    transform.x = (bounds.width - graphWidth * transform.scale) / 2;
+    transform.x =
+      safe.left +
+      (availableWidth - contentWidth * transform.scale) / 2 -
+      contentLeft * transform.scale;
     transform.y =
-      topInset + (availableHeight - graphHeight * transform.scale) / 2;
+      safe.top +
+      (availableHeight - contentHeight * transform.scale) / 2 -
+      contentTop * transform.scale;
     renderTransform();
   };
 
+  const centerSelection = (node: HTMLButtonElement): void => {
+    positionInspector(node);
+    const viewportBounds = viewport.getBoundingClientRect();
+    const nodeBounds = node.getBoundingClientRect();
+    const inspectorBounds = inspector.getBoundingClientRect();
+    const safe = getSafeArea();
+    const unionLeft = Math.min(nodeBounds.left, inspectorBounds.left);
+    const unionTop = Math.min(nodeBounds.top, inspectorBounds.top);
+    const unionRight = Math.max(nodeBounds.right, inspectorBounds.right);
+    const unionBottom = Math.max(nodeBounds.bottom, inspectorBounds.bottom);
+    const targetX =
+      viewportBounds.left +
+      safe.left +
+      (viewportBounds.width - safe.left - safe.right) / 2;
+    const targetY =
+      viewportBounds.top +
+      safe.top +
+      (viewportBounds.height - safe.top - safe.bottom) / 2;
+
+    transform.x += targetX - (unionLeft + unionRight) / 2;
+    transform.y += targetY - (unionTop + unionBottom) / 2;
+    renderTransform();
+    requestAnimationFrame(() => positionInspector(node));
+  };
+
   const clearSelection = (): void => {
-    for (const node of root.querySelectorAll<HTMLButtonElement>(
-      "[data-knowledge-node]",
-    )) {
+    for (const node of nodeElements) {
       node.setAttribute("aria-pressed", "false");
       node.removeAttribute("data-selected");
     }
@@ -108,6 +351,10 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     }
     inspector.setAttribute("aria-hidden", "true");
     inspector.replaceChildren();
+    inspector.removeAttribute("data-placement");
+    inspector.style.removeProperty("left");
+    inspector.style.removeProperty("top");
+    inspector.style.removeProperty("--kg-tail-offset");
     delete root.dataset.selectedNode;
   };
 
@@ -115,13 +362,14 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     const template = root.querySelector<HTMLTemplateElement>(
       `template[data-knowledge-detail="${CSS.escape(nodeId)}"]`,
     );
-    if (!template) {
+    const selectedNode = nodeElements.find(
+      (node) => node.dataset.knowledgeNode === nodeId,
+    );
+    if (!template || !selectedNode) {
       return;
     }
 
-    for (const node of root.querySelectorAll<HTMLButtonElement>(
-      "[data-knowledge-node]",
-    )) {
+    for (const node of nodeElements) {
       const selected = node.dataset.knowledgeNode === nodeId;
       node.setAttribute("aria-pressed", String(selected));
       node.toggleAttribute("data-selected", selected);
@@ -142,7 +390,10 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     inspector.replaceChildren(template.content.cloneNode(true));
     inspector.setAttribute("aria-hidden", "false");
     root.dataset.selectedNode = nodeId;
-    inspector.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      centerSelection(selectedNode);
+      inspector.focus({ preventScroll: true });
+    });
   };
 
   root.addEventListener("click", (event) => {
@@ -155,6 +406,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return;
     }
     const node = target.closest<HTMLElement>("[data-knowledge-node]");
+    if (node && performance.now() < suppressNodeClickUntil) {
+      return;
+    }
     const relation = target.closest<HTMLElement>("[data-select-node]");
     const nodeId =
       node?.dataset.knowledgeNode ?? relation?.dataset.selectNode ?? "";
@@ -162,6 +416,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       selectNode(nodeId);
     }
   });
+
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && root.dataset.selectedNode) {
       clearSelection();
@@ -195,13 +450,37 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   );
 
   viewport.addEventListener("pointerdown", (event) => {
-    const target = event.target;
-    if (
-      target instanceof Element &&
-      target.closest("[data-knowledge-node]")
-    ) {
+    if (event.button !== 0 && event.pointerType === "mouse") {
       return;
     }
+    const target = event.target;
+    const node =
+      target instanceof Element
+        ? target.closest<HTMLButtonElement>("[data-knowledge-node]")
+        : null;
+
+    if (node) {
+      const nodeId = node.dataset.knowledgeNode;
+      const position = nodeId ? nodePositions.get(nodeId) : undefined;
+      if (!nodeId || !position) {
+        return;
+      }
+      event.preventDefault();
+      viewport.setPointerCapture(event.pointerId);
+      nodeDrag = {
+        pointerId: event.pointerId,
+        node,
+        nodeId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startX: position.x,
+        startY: position.y,
+        moved: false,
+      };
+      node.setAttribute("data-dragging", "");
+      return;
+    }
+
     viewport.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.size === 1) {
@@ -226,6 +505,25 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   });
 
   viewport.addEventListener("pointermove", (event) => {
+    if (nodeDrag?.pointerId === event.pointerId) {
+      const position = nodePositions.get(nodeDrag.nodeId);
+      if (!position) {
+        return;
+      }
+      const deltaX = (event.clientX - nodeDrag.startClientX) / transform.scale;
+      const deltaY = (event.clientY - nodeDrag.startClientY) / transform.scale;
+      if (Math.hypot(deltaX, deltaY) > 4 / transform.scale) {
+        nodeDrag.moved = true;
+      }
+      position.x = nodeDrag.startX + deltaX;
+      position.y = nodeDrag.startY + deltaY;
+      nodeDrag.node.style.left = `${position.x}px`;
+      nodeDrag.node.style.top = `${position.y}px`;
+      updateEdges();
+      scheduleInspectorPosition();
+      return;
+    }
+
     if (!pointers.has(event.pointerId)) {
       return;
     }
@@ -262,6 +560,15 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   });
 
   const releasePointer = (event: PointerEvent): void => {
+    if (nodeDrag?.pointerId === event.pointerId) {
+      nodeDrag.node.removeAttribute("data-dragging");
+      if (nodeDrag.moved) {
+        suppressNodeClickUntil = performance.now() + 250;
+      }
+      nodeDrag = undefined;
+      return;
+    }
+
     pointers.delete(event.pointerId);
     if (pointers.size === 1) {
       const remaining = [...pointers.values()][0];
@@ -280,12 +587,17 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const observer = new ResizeObserver(() => {
     if (root.dataset.view !== "list") {
-      fit();
+      if (root.dataset.selectedNode) {
+        scheduleInspectorPosition();
+      } else {
+        fit();
+      }
     }
   });
   observer.observe(viewport);
 
   root.dataset.enhanced = "true";
+  updateEdges();
   const fitAfterLayout = (): void => {
     requestAnimationFrame(() => requestAnimationFrame(fit));
   };

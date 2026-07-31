@@ -198,7 +198,6 @@ h2 {
   background: var(--surface);
   border: 2px solid var(--text);
   border-radius: 1.25rem;
-  box-shadow: 0 6px 0 var(--shadow);
   left: clamp(0.75rem, 2vw, 1.5rem);
   margin: 0;
   max-width: none;

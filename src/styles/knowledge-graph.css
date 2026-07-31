@@ -27,7 +27,6 @@
   background: var(--surface);
   border: 2px solid var(--text);
   border-radius: 999px;
-  box-shadow: 0 6px 0 var(--shadow);
   display: flex;
   flex-wrap: wrap;
   gap: 0.65rem;
@@ -76,6 +75,10 @@
 
 .kg-viewport {
   background-color: var(--background);
+  background-image:
+    radial-gradient(circle, var(--grid-line) 1.25px, transparent 1.5px);
+  background-position: 0 0;
+  background-size: 24px 24px;
   cursor: grab;
   overflow: hidden;
   position: relative;
@@ -139,6 +142,7 @@
   position: absolute;
   text-align: center;
   user-select: none;
+  will-change: left, top;
 }
 
 .kg-node strong {
@@ -169,9 +173,26 @@
 
 .kg-node[data-selected] {
   background: var(--text);
+  box-shadow: none;
   color: var(--background);
-  outline: 4px double var(--text);
-  outline-offset: 5px;
+  outline: none;
+  transform: none;
+}
+
+.kg-node[data-selected]:active,
+.kg-node[data-dragging] {
+  box-shadow: none;
+  cursor: grabbing;
+  transform: none;
+}
+
+.kg-node:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 4px;
+}
+
+.kg-node[data-selected]:focus-visible {
+  outline: none;
 }
 
 .kg-legend {
@@ -180,7 +201,6 @@
   border: 2px solid var(--text);
   border-radius: 999px;
   bottom: 1rem;
-  box-shadow: 0 4px 0 var(--shadow);
   color: var(--muted);
   display: flex;
   font-size: 0.72rem;
@@ -200,35 +220,107 @@
 
 .kg-inspector {
   background: var(--surface);
-  border-left: 2px solid var(--text);
-  box-shadow: -10px 0 0 var(--shadow);
-  height: 100%;
-  max-width: 100%;
+  border: 2px solid var(--text);
+  border-radius: 1.4rem;
+  height: auto;
+  max-height: calc(100% - 2rem);
+  max-width: calc(100% - 2rem);
   opacity: 0;
-  overflow: auto;
-  padding:
-    clamp(6.5rem, 13vh, 8rem)
-    clamp(1.25rem, 3vw, 2rem)
-    2rem;
+  overflow: visible;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
   pointer-events: none;
   position: absolute;
-  right: 0;
+  right: auto;
   top: 0;
-  transform: translateX(calc(100% + 12px));
+  transform: scale(0.96);
+  transform-origin: center;
   transition:
-    transform 180ms ease,
+    transform 150ms ease,
     opacity 120ms ease,
     visibility 180ms;
   visibility: hidden;
-  width: min(26rem, calc(100% - 1rem));
+  width: min(24rem, calc(100% - 2rem));
   z-index: 15;
 }
 
 .knowledge-graph[data-selected-node] .kg-inspector {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+  transform: scale(1);
   visibility: visible;
+}
+
+.kg-inspector::before,
+.kg-inspector::after {
+  content: "";
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+}
+
+.kg-inspector[data-placement="right"]::before {
+  border-bottom: 11px solid transparent;
+  border-right: 14px solid var(--text);
+  border-top: 11px solid transparent;
+  left: -14px;
+  top: calc(var(--kg-tail-offset, 50%) - 11px);
+}
+
+.kg-inspector[data-placement="right"]::after {
+  border-bottom: 8px solid transparent;
+  border-right: 11px solid var(--surface);
+  border-top: 8px solid transparent;
+  left: -11px;
+  top: calc(var(--kg-tail-offset, 50%) - 8px);
+}
+
+.kg-inspector[data-placement="left"]::before {
+  border-bottom: 11px solid transparent;
+  border-left: 14px solid var(--text);
+  border-top: 11px solid transparent;
+  right: -14px;
+  top: calc(var(--kg-tail-offset, 50%) - 11px);
+}
+
+.kg-inspector[data-placement="left"]::after {
+  border-bottom: 8px solid transparent;
+  border-left: 11px solid var(--surface);
+  border-top: 8px solid transparent;
+  right: -11px;
+  top: calc(var(--kg-tail-offset, 50%) - 8px);
+}
+
+.kg-inspector[data-placement="bottom"]::before {
+  border-bottom: 14px solid var(--text);
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  left: calc(var(--kg-tail-offset, 50%) - 11px);
+  top: -14px;
+}
+
+.kg-inspector[data-placement="bottom"]::after {
+  border-bottom: 11px solid var(--surface);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  left: calc(var(--kg-tail-offset, 50%) - 8px);
+  top: -11px;
+}
+
+.kg-inspector[data-placement="top"]::before {
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-top: 14px solid var(--text);
+  bottom: -14px;
+  left: calc(var(--kg-tail-offset, 50%) - 11px);
+}
+
+.kg-inspector[data-placement="top"]::after {
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 11px solid var(--surface);
+  bottom: -11px;
+  left: calc(var(--kg-tail-offset, 50%) - 8px);
 }
 
 .kg-eyebrow {
@@ -242,6 +334,8 @@
 
 .kg-detail {
   max-width: none;
+  max-height: calc(100svh - 12rem);
+  overflow: auto;
 }
 
 .kg-detail__header {
@@ -315,14 +409,29 @@
   background: var(--text);
   border: 2px solid var(--text);
   border-radius: 1rem;
-  box-shadow: 0 6px 0 var(--shadow-muted);
   color: var(--background);
   display: block;
   font-weight: 800;
-  margin-top: 2rem;
   padding: 0.8rem 1rem;
+  position: relative;
   text-align: center;
   text-decoration: none;
+  z-index: 1;
+}
+
+.kg-cta-shadow {
+  margin: 2rem 0 7px;
+  position: relative;
+}
+
+.kg-cta-shadow::before {
+  background: #ffffff;
+  border: 2px solid #090909;
+  border-radius: 1rem;
+  content: "";
+  inset: 0;
+  position: absolute;
+  transform: translateY(7px);
 }
 
 .kg-list-view {
@@ -395,8 +504,9 @@
   }
 
   .kg-inspector {
-    padding-top: 6rem;
-    width: calc(100% - 0.75rem);
+    max-height: calc(100% - 1.5rem);
+    max-width: calc(100% - 1.5rem);
+    width: min(24rem, calc(100% - 1.5rem));
   }
 
   .kg-legend {
