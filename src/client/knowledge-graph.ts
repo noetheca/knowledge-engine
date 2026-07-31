@@ -74,6 +74,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     root.querySelector<HTMLElement>("[data-reader-content]");
   const readerNavigation =
     root.querySelector<HTMLElement>("[data-reader-navigation]");
+  const readerFullPage =
+    root.querySelector<HTMLAnchorElement>("[data-reader-full-page]");
 
   if (
     !viewport ||
@@ -85,7 +87,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     !reader ||
     !readerPanel ||
     !readerContent ||
-    !readerNavigation
+    !readerNavigation ||
+    !readerFullPage
   ) {
     return;
   }
@@ -121,6 +124,13 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       const nodeId = node.dataset.knowledgeNode;
       return nodeId ? [[nodeId, node] as const] : [];
     }),
+  );
+  const edgeArrowsById = new Map(
+    [...root.querySelectorAll<SVGPolygonElement>("[data-knowledge-arrow]")]
+      .flatMap((arrow) => {
+        const edgeId = arrow.dataset.knowledgeArrow;
+        return edgeId ? [[edgeId, arrow] as const] : [];
+      }),
   );
   const connections: GraphConnection[] = [];
   for (const edge of root.querySelectorAll<SVGPathElement>(
@@ -299,10 +309,35 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       }
       const start = connectionPoint(source, target, 4);
       const end = connectionPoint(target, source, 14);
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const directionX = dx / distance;
+      const directionY = dy / distance;
+      const arrowLength = Math.min(18, distance * 0.4);
+      const arrowHalfWidth = Math.min(10, distance * 0.2);
+      const arrowBase = {
+        x: end.x - directionX * arrowLength,
+        y: end.y - directionY * arrowLength,
+      };
       edge.setAttribute(
         "d",
-        `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
+        `M ${start.x} ${start.y} L ${arrowBase.x} ${arrowBase.y}`,
       );
+      const edgeId = edge.dataset.knowledgeEdge;
+      const arrow = edgeId ? edgeArrowsById.get(edgeId) : undefined;
+      if (arrow) {
+        const perpendicularX = -directionY;
+        const perpendicularY = directionX;
+        arrow.setAttribute(
+          "points",
+          [
+            `${end.x},${end.y}`,
+            `${arrowBase.x + perpendicularX * arrowHalfWidth},${arrowBase.y + perpendicularY * arrowHalfWidth}`,
+            `${arrowBase.x - perpendicularX * arrowHalfWidth},${arrowBase.y - perpendicularY * arrowHalfWidth}`,
+          ].join(" "),
+        );
+      }
     }
   };
 
@@ -476,9 +511,11 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const createReaderNavSection = (
     label: string,
     relations: ReaderRelation[],
+    direction: "previous" | "next",
   ): HTMLElement => {
     const section = document.createElement("section");
     section.className = "kg-reader-nav-section";
+    section.dataset.direction = direction;
     const heading = document.createElement("h2");
     heading.textContent = label;
     section.append(heading);
@@ -526,8 +563,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return relation ? [relation] : [];
     });
     readerNavigation.replaceChildren(
-      createReaderNavSection("前へ", previous),
-      createReaderNavSection("次へ", next),
+      createReaderNavSection("前へ", previous, "previous"),
+      createReaderNavSection("次へ", next, "next"),
     );
   };
 
@@ -560,6 +597,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       readerTrigger = trigger;
     }
     root.dataset.readerOpen = "";
+    readerFullPage.href = href;
     reader.setAttribute("aria-hidden", "false");
     readerPanel.setAttribute("aria-busy", "true");
     syncReaderModality();
@@ -768,8 +806,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       node.setAttribute("aria-pressed", "false");
       node.removeAttribute("data-selected");
     }
-    for (const edge of root.querySelectorAll<SVGPathElement>(
-      "[data-knowledge-edge]",
+    for (const edge of root.querySelectorAll<SVGElement>(
+      "[data-knowledge-edge], [data-knowledge-arrow]",
     )) {
       edge.classList.remove("is-connected", "is-incoming");
     }
@@ -796,8 +834,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       node.setAttribute("aria-pressed", String(selected));
       node.toggleAttribute("data-selected", selected);
     }
-    for (const edge of root.querySelectorAll<SVGPathElement>(
-      "[data-knowledge-edge]",
+    for (const edge of root.querySelectorAll<SVGElement>(
+      "[data-knowledge-edge], [data-knowledge-arrow]",
     )) {
       edge.classList.toggle(
         "is-connected",
@@ -812,6 +850,15 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     inspector.replaceChildren(template.content.cloneNode(true));
     inspector.setAttribute("aria-hidden", "false");
     root.dataset.selectedNode = nodeId;
+    if (root.dataset.readerOpen !== undefined) {
+      const href = selectedNode.dataset.knowledgeHref;
+      if (href) {
+        const destination = new URL(href, window.location.href);
+        if (destination.origin === window.location.origin) {
+          void openReader(destination.href, selectedNode);
+        }
+      }
+    }
     requestAnimationFrame(() => {
       centerSelection(selectedNode);
       if (root.dataset.readerOpen !== undefined) {
@@ -851,7 +898,6 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (destination.origin === window.location.origin) {
         event.preventDefault();
         selectNode(nodeId);
-        void openReader(destination.href, readerLink);
       }
       return;
     }

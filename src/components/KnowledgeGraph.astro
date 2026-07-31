@@ -67,28 +67,23 @@ const statusLabels = {
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               aria-hidden="true"
             >
-              <defs>
-                <marker
-                  id="knowledge-arrow"
-                  viewBox="0 0 10 10"
-                  refX="10"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
-                </marker>
-              </defs>
               {
                 layout.edges.map((edge) => (
-                  <path
-                    d={edge.path}
-                    data-knowledge-edge={edge.id}
-                    data-edge-source={edge.source}
-                    data-edge-target={edge.target}
-                    marker-end="url(#knowledge-arrow)"
-                  />
+                  <g>
+                    <path
+                      d={edge.path}
+                      data-knowledge-edge={edge.id}
+                      data-edge-source={edge.source}
+                      data-edge-target={edge.target}
+                    />
+                    <polygon
+                      class="kg-edge-arrow"
+                      data-knowledge-arrow={edge.id}
+                      data-edge-source={edge.source}
+                      data-edge-target={edge.target}
+                      points=""
+                    />
+                  </g>
                 ))
               }
             </svg>
@@ -102,6 +97,7 @@ const statusLabels = {
                     type="button"
                     class="kg-node"
                     data-knowledge-node={node.id}
+                    data-knowledge-href={node.href}
                     aria-pressed="false"
                     style={`left:${position.x}px;top:${position.y}px;width:${position.width}px;height:${position.height}px`}
                   >
@@ -182,13 +178,18 @@ const statusLabels = {
           data-reader-navigation
           aria-label="前後の知識"
         ></nav>
-        <button
-          class="kg-reader-close"
-          type="button"
-          data-close-reader
-        >
-          閉じる
-        </button>
+        <div class="kg-reader-actions">
+          <button
+            class="kg-reader-close"
+            type="button"
+            data-close-reader
+          >
+            閉じる
+          </button>
+          <a class="kg-reader-full-page" data-reader-full-page href="/">
+            フルページで表示
+          </a>
+        </div>
       </footer>
     </section>
   </div>
