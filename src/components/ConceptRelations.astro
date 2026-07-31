@@ -7,10 +7,12 @@ interface Relation {
 
 interface Props {
   prerequisites?: Relation[];
+  successors?: Relation[];
   related?: Relation[];
   mode?: "prerequisite" | "contextual";
   labels?: {
     prerequisites: string;
+    successors?: string;
     related: string;
     empty: string;
   };
@@ -19,6 +21,7 @@ interface Props {
 
 const {
   prerequisites = [],
+  successors,
   related = [],
   mode = "prerequisite",
   labels = {
@@ -30,7 +33,13 @@ const {
 } = Astro.props;
 
 const groups = mode === "contextual"
-  ? [{ title: labels.related, entries: related }]
+  ? successors === undefined
+    ? [{ title: labels.related, entries: related }]
+    : [
+        { title: labels.prerequisites, entries: prerequisites },
+        { title: labels.successors ?? "継承先", entries: successors },
+        { title: labels.related, entries: related },
+      ]
   : [
       { title: labels.prerequisites, entries: prerequisites },
       { title: labels.related, entries: related },
