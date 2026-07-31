@@ -15,6 +15,10 @@ This bootstrap release intentionally keeps the package small:
 Astro is a peer dependency. Domain repositories own their content and thin
 site configuration; this repository owns shared behavior.
 
+Filesystem paths are build-time source locations, not knowledge identities.
+Consumers can use `createTranslationFileIndex()` to match framework content
+entries to the stable ID read from `concept.yaml`.
+
 ## Requirements
 
 - Node.js 24

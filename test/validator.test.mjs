@@ -3,7 +3,12 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createManifest, loadKnowledgeBase } from "../dist/index.js";
+import {
+  createManifest,
+  createTranslationFileIndex,
+  loadKnowledgeBase,
+  normalizeTranslationFilePath,
+} from "../dist/index.js";
 
 async function fixture(concepts) {
   const root = await mkdtemp(join(tmpdir(), "noetheca-engine-"));
@@ -65,6 +70,56 @@ test("loads valid concepts and creates a stable manifest", async () => {
   assert.deepEqual(
     createManifest(knowledgeBase).concepts.map(({ id }) => id),
     ["math/integer", "math/natural"],
+  );
+});
+
+test("keeps concept identity independent from its directory", async () => {
+  const root = await fixture({
+    "storage/by-author/alpha": {
+      metadata: {
+        schemaVersion: 1,
+        id: "math/foundations/natural-numbers",
+        prerequisites: [],
+        related: [],
+      },
+      translations: { ja: ja("自然数") },
+    },
+  });
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  const [concept] = knowledgeBase.concepts;
+  assert.equal(concept.metadata.id, "math/foundations/natural-numbers");
+  assert.ok(concept.directory.endsWith(join("storage", "by-author", "alpha")));
+
+  const index = createTranslationFileIndex(knowledgeBase);
+  const translation = concept.translations.get("ja");
+  assert.equal(
+    index.get(normalizeTranslationFilePath(translation.filePath))?.concept
+      .metadata.id,
+    "math/foundations/natural-numbers",
+  );
+});
+
+test("moving a concept directory does not change manifest semantics", async () => {
+  const concept = {
+    metadata: {
+      schemaVersion: 1,
+      id: "math/foundations/natural-numbers",
+      prerequisites: [],
+      related: [],
+    },
+    translations: { ja: ja("自然数") },
+  };
+  const first = await loadKnowledgeBase(
+    await fixture({ "layout-a/topic": concept }),
+  );
+  const second = await loadKnowledgeBase(
+    await fixture({ "layout-b/archive/x": concept }),
+  );
+
+  assert.deepEqual(
+    createManifest(first).concepts,
+    createManifest(second).concepts,
   );
 });
 
