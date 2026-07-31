@@ -1,0 +1,50 @@
+{
+  "name": "@noetheca/knowledge-engine",
+  "version": "0.0.0",
+  "description": "Shared validation, manifest, and Astro primitives for noetheca.",
+  "type": "module",
+  "bin": {
+    "noetheca-knowledge": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./components/KnowledgeLayout.astro": "./src/components/KnowledgeLayout.astro",
+    "./components/ConceptRelations.astro": "./src/components/ConceptRelations.astro",
+    "./styles/base.css": "./src/styles/base.css"
+  },
+  "files": [
+    "dist",
+    "src/components",
+    "src/styles",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "dependencies": {
+    "yaml": "2.9.0"
+  },
+  "peerDependencies": {
+    "astro": ">=7.1.0 <8"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "astro": "7.1.6",
+    "typescript": "6.0.3"
+  }
+}

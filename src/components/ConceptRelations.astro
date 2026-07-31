@@ -1,0 +1,58 @@
+---
+interface Relation {
+  id: string;
+  title?: string;
+  href?: string;
+}
+
+interface Props {
+  prerequisites?: Relation[];
+  related?: Relation[];
+  labels?: {
+    prerequisites: string;
+    related: string;
+    empty: string;
+  };
+}
+
+const {
+  prerequisites = [],
+  related = [],
+  labels = {
+    prerequisites: "前提知識",
+    related: "関連知識",
+    empty: "登録されていません",
+  },
+} = Astro.props;
+
+const groups = [
+  { title: labels.prerequisites, entries: prerequisites },
+  { title: labels.related, entries: related },
+];
+---
+
+<aside class="relations" aria-label="知識の関係">
+  {
+    groups.map(({ title, entries }) => (
+      <section>
+        <h2>{title}</h2>
+        {entries.length > 0 ? (
+          <ul>
+            {entries.map((entry) => (
+              <li>
+                {entry.href ? (
+                  <a href={entry.href}>{entry.title ?? entry.id}</a>
+                ) : (
+                  <span>{entry.title ?? entry.id}</span>
+                )}
+                {entry.title && <code>{entry.id}</code>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="muted">{labels.empty}</p>
+        )}
+      </section>
+    ))
+  }
+</aside>

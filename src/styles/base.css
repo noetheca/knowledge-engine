@@ -1,0 +1,151 @@
+:root {
+  color-scheme: light;
+  --background: #f5f3ee;
+  --surface: #fffdf8;
+  --text: #24231f;
+  --muted: #68655e;
+  --line: #d9d4c9;
+  --accent: #275d52;
+  --accent-soft: #dcebe6;
+  --max-width: 72rem;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color: var(--text);
+  line-height: 1.7;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  text-decoration-thickness: 0.14em;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 0.2rem solid var(--accent);
+  outline-offset: 0.2rem;
+}
+
+.skip-link {
+  background: var(--text);
+  color: white;
+  left: 1rem;
+  padding: 0.6rem 0.8rem;
+  position: fixed;
+  top: 1rem;
+  transform: translateY(-200%);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+.site-header,
+.site-footer,
+.page-shell {
+  margin-inline: auto;
+  max-width: var(--max-width);
+  padding-inline: clamp(1rem, 4vw, 3rem);
+}
+
+.site-header {
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 0.8rem;
+  padding-block: 1rem;
+}
+
+.brand {
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.site-context,
+.muted {
+  color: var(--muted);
+}
+
+.page-shell {
+  min-height: 70vh;
+  padding-block: clamp(2.5rem, 7vw, 6rem);
+}
+
+.page-shell > article {
+  max-width: 48rem;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: clamp(2rem, 6vw, 4rem);
+  letter-spacing: -0.035em;
+  margin-block: 0.4rem 1rem;
+}
+
+h2 {
+  margin-top: 2.4rem;
+}
+
+.lede {
+  color: var(--muted);
+  font-size: 1.15rem;
+}
+
+.relations {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin-top: 3rem;
+}
+
+.relations code {
+  color: var(--muted);
+  display: block;
+  font-size: 0.75rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding-block: 1.5rem 3rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a {
+    transition: color 120ms ease;
+  }
+}

@@ -1,0 +1,41 @@
+---
+import "../styles/base.css";
+
+interface Props {
+  title: string;
+  summary?: string;
+  locale?: string;
+  canonicalPath?: string;
+}
+
+const {
+  title,
+  summary = "noetheca knowledge page",
+  locale = "ja",
+  canonicalPath,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={summary} />
+    {canonicalPath && <link rel="canonical" href={canonicalPath} />}
+    <title>{title} | noetheca</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="site-header">
+      <a class="brand" href={import.meta.env.BASE_URL}>noetheca</a>
+      <span class="site-context">knowledge base</span>
+    </header>
+    <main id="main" class="page-shell">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>Draft knowledge content. Verify facts and sources before reuse.</p>
+    </footer>
+  </body>
+</html>
