@@ -61,8 +61,23 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const fitButton = root.querySelector<HTMLButtonElement>("[data-graph-fit]");
   const viewButton =
     root.querySelector<HTMLButtonElement>("[data-graph-view-toggle]");
+  const shell = root.querySelector<HTMLElement>(".kg-shell");
+  const reader = root.querySelector<HTMLElement>("[data-knowledge-reader]");
+  const readerPanel = root.querySelector<HTMLElement>("[data-reader-panel]");
+  const readerContent =
+    root.querySelector<HTMLElement>("[data-reader-content]");
 
-  if (!viewport || !world || !inspector || !fitButton || !viewButton) {
+  if (
+    !viewport ||
+    !world ||
+    !inspector ||
+    !fitButton ||
+    !viewButton ||
+    !shell ||
+    !reader ||
+    !readerPanel ||
+    !readerContent
+  ) {
     return;
   }
 
@@ -127,6 +142,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let simulationFrame = 0;
   let simulationTicks = 0;
   let simulationAnchorId: string | undefined;
+  let readerRequest: AbortController | undefined;
+  let readerTrigger: HTMLElement | undefined;
 
   const getSafeArea = (): SafeArea => {
     const bounds = viewport.getBoundingClientRect();
@@ -400,6 +417,101 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     }
   };
 
+  const showReaderMessage = (
+    message: string,
+    className: string,
+  ): HTMLParagraphElement => {
+    const paragraph = document.createElement("p");
+    paragraph.className = className;
+    paragraph.textContent = message;
+    readerContent.replaceChildren(paragraph);
+    return paragraph;
+  };
+
+  const closeReader = (): void => {
+    readerRequest?.abort();
+    readerRequest = undefined;
+    reader.setAttribute("aria-hidden", "true");
+    readerPanel.setAttribute("aria-busy", "false");
+    shell.inert = false;
+    delete root.dataset.readerOpen;
+    readerTrigger?.focus({ preventScroll: true });
+    readerTrigger = undefined;
+  };
+
+  const openReader = async (
+    href: string,
+    trigger: HTMLElement,
+  ): Promise<void> => {
+    readerRequest?.abort();
+    const request = new AbortController();
+    readerRequest = request;
+    readerTrigger = trigger;
+    root.dataset.readerOpen = "";
+    reader.setAttribute("aria-hidden", "false");
+    readerPanel.setAttribute("aria-busy", "true");
+    shell.inert = true;
+    showReaderMessage("記事を読み込んでいます…", "kg-reader-loading");
+    readerPanel.scrollTop = 0;
+    readerPanel
+      .querySelector<HTMLButtonElement>("[data-close-reader]")
+      ?.focus({ preventScroll: true });
+
+    try {
+      const response = await fetch(href, {
+        headers: { Accept: "text/html" },
+        signal: request.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Article request failed with ${response.status}.`);
+      }
+      const source = await response.text();
+      const documentFragment = new DOMParser().parseFromString(
+        source,
+        "text/html",
+      );
+      const article =
+        documentFragment.querySelector<HTMLElement>("main#main > article");
+      if (!article) {
+        throw new Error("The article element was not found.");
+      }
+
+      const importedArticle = document.importNode(article, true);
+      importedArticle.classList.add("kg-reader-article");
+      for (const element of importedArticle.querySelectorAll<HTMLElement>(
+        "[href], [src]",
+      )) {
+        for (const attribute of ["href", "src"] as const) {
+          const value = element.getAttribute(attribute);
+          if (!value || value.startsWith("#")) {
+            continue;
+          }
+          element.setAttribute(attribute, new URL(value, response.url).href);
+        }
+      }
+      readerContent.replaceChildren(importedArticle);
+      readerPanel.setAttribute("aria-busy", "false");
+    } catch (error) {
+      if (request.signal.aborted) {
+        return;
+      }
+      const errorMessage = showReaderMessage(
+        "記事を読み込めませんでした。",
+        "kg-reader-error",
+      );
+      const directLink = document.createElement("a");
+      directLink.href = href;
+      directLink.textContent = "通常のページで開く";
+      errorMessage.append(document.createElement("br"), directLink);
+      readerPanel.setAttribute("aria-busy", "false");
+      console.error(error);
+    } finally {
+      if (readerRequest === request) {
+        readerRequest = undefined;
+      }
+    }
+  };
+
   const zoomAt = (
     nextScale: number,
     clientX: number,
@@ -557,6 +669,19 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (!(target instanceof Element)) {
       return;
     }
+    if (target.closest("[data-close-reader]")) {
+      closeReader();
+      return;
+    }
+    const articleLink = target.closest<HTMLAnchorElement>(".kg-cta");
+    if (articleLink) {
+      const destination = new URL(articleLink.href, window.location.href);
+      if (destination.origin === window.location.origin) {
+        event.preventDefault();
+        void openReader(destination.href, articleLink);
+      }
+      return;
+    }
     if (target.closest("[data-close-inspector]")) {
       clearSelection();
       return;
@@ -574,6 +699,10 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   });
 
   root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && root.dataset.readerOpen !== undefined) {
+      closeReader();
+      return;
+    }
     if (event.key === "Escape" && root.dataset.selectedNode) {
       clearSelection();
     }

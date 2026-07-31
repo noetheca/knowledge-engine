@@ -152,6 +152,34 @@ const statusLabels = {
     </section>
   </div>
 
+  <div
+    class="kg-reader-overlay"
+    data-knowledge-reader
+    aria-hidden="true"
+  >
+    <button
+      class="kg-reader-backdrop"
+      type="button"
+      data-close-reader
+      aria-label="記事を閉じる"
+    ></button>
+    <section
+      class="kg-reader-panel"
+      data-reader-panel
+      role="dialog"
+      aria-modal="true"
+      aria-label="知識の記事"
+      aria-busy="false"
+      tabindex="-1"
+    >
+      <header class="kg-reader-header">
+        <p class="kg-eyebrow">Knowledge article</p>
+        <button type="button" data-close-reader>閉じる</button>
+      </header>
+      <div class="kg-reader-content" data-reader-content></div>
+    </section>
+  </div>
+
   {
     graph.nodes.map((node) => (
       <template data-knowledge-detail={node.id}>
