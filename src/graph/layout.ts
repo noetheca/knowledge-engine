@@ -258,6 +258,7 @@ function settleContextualNodes(
 
 function enforceChronologyBands(
   simulationNodes: SimulationNode[],
+  edges: KnowledgeGraphEdge[],
   chronology: Readonly<Record<string, number>>,
   nodeWidth: number,
   nodeHeight: number,
@@ -279,12 +280,61 @@ function enforceChronologyBands(
     return;
   }
 
-  const orderedGroups = [...rankedGroups.entries()].sort(
+  const rankedEntries = [...rankedGroups.entries()].sort(
     ([left], [right]) => left - right,
+  );
+  const contextualEdges = edges.filter(({ kind }) => kind === "contextual");
+  const splitByContextDepth = (nodes: SimulationNode[]): SimulationNode[][] => {
+    const ids = new Set(nodes.map(({ id }) => id));
+    const outgoing = new Map<string, string[]>();
+    const indegree = new Map(nodes.map(({ id }) => [id, 0]));
+    for (const { source, target } of contextualEdges) {
+      if (!ids.has(source) || !ids.has(target)) {
+        continue;
+      }
+      outgoing.set(source, [...(outgoing.get(source) ?? []), target]);
+      indegree.set(target, (indegree.get(target) ?? 0) + 1);
+    }
+
+    const depth = new Map(nodes.map(({ id }) => [id, 0]));
+    const queue = nodes
+      .filter(({ id }) => indegree.get(id) === 0)
+      .map(({ id }) => id)
+      .sort(compareText);
+    while (queue.length > 0) {
+      const source = queue.shift();
+      if (!source) {
+        continue;
+      }
+      for (const target of (outgoing.get(source) ?? []).sort(compareText)) {
+        depth.set(
+          target,
+          Math.max(depth.get(target) ?? 0, (depth.get(source) ?? 0) + 1),
+        );
+        const remaining = (indegree.get(target) ?? 1) - 1;
+        indegree.set(target, remaining);
+        if (remaining === 0) {
+          queue.push(target);
+          queue.sort(compareText);
+        }
+      }
+    }
+
+    const groups = new Map<number, SimulationNode[]>();
+    for (const node of nodes) {
+      const nodeDepth = depth.get(node.id) ?? 0;
+      groups.set(nodeDepth, [...(groups.get(nodeDepth) ?? []), node]);
+    }
+    return [...groups.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, group]) => group.sort((left, right) => compareText(left.id, right.id)));
+  };
+  const orderedGroups = rankedEntries.flatMap(([, nodes]) =>
+    splitByContextDepth(nodes),
   );
   const bandGap = nodeHeight + collisionGap;
   const firstBandY = -((orderedGroups.length - 1) * bandGap) / 2;
-  for (const [index, [, nodes]] of orderedGroups.entries()) {
+  for (const [index, nodes] of orderedGroups.entries()) {
     const bandY = firstBandY + index * bandGap;
     for (const node of nodes) {
       node.y = bandY;
@@ -477,6 +527,7 @@ function layoutContextualKnowledgeGraph(
 
   enforceChronologyBands(
     simulationNodes,
+    orderedEdges,
     chronology,
     nodeWidth,
     nodeHeight,

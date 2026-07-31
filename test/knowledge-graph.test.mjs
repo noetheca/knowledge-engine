@@ -258,6 +258,20 @@ test("places a directed contextual target below its source", () => {
   assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
 });
 
+test("places a same-period contextual target below its source", () => {
+  const graph = createKnowledgeGraphModel(
+    [node("source"), node("target")],
+    { contextualRelations: [{ source: "source", target: "target" }] },
+  );
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology: { source: 2000, target: 2000 },
+  });
+  const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
+
+  assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
+});
+
 test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
   const graph = createKnowledgeGraphModel([
     node("classical", { related: ["modern"] }),
