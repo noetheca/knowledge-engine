@@ -62,9 +62,25 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   if (root.dataset.enhanced === "true") {
     return;
   }
-  const ui = getUiStrings(
+  const defaultUi = getUiStrings(
     root.dataset.locale ?? document.documentElement.lang,
   ).graph;
+  let ui = defaultUi;
+  if (root.dataset.ui) {
+    try {
+      const labels = JSON.parse(root.dataset.ui) as Partial<typeof defaultUi>;
+      ui = {
+        ...defaultUi,
+        ...labels,
+        status: {
+          ...defaultUi.status,
+          ...labels.status,
+        },
+      };
+    } catch {
+      // Keep the locale defaults when server-provided labels are malformed.
+    }
+  }
 
   const viewport = root.querySelector<HTMLElement>("[data-graph-viewport]");
   const world = root.querySelector<HTMLElement>("[data-graph-world]");
@@ -169,6 +185,18 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let readerRequest: AbortController | undefined;
   let readerTrigger: HTMLElement | undefined;
   const readerModalQuery = window.matchMedia("(max-width: 52rem)");
+  const contextualRelationships =
+    root.dataset.relationshipMode === "contextual";
+  const listFirst =
+    root.dataset.initialView === "list" ||
+    (root.dataset.initialView === "responsive" &&
+      window.matchMedia("(max-width: 40rem)").matches &&
+      nodeElements.length > 16);
+  if (listFirst) {
+    root.dataset.view = "list";
+    viewButton.setAttribute("aria-pressed", "true");
+    viewButton.textContent = ui.map;
+  }
 
   const getSafeArea = (): SafeArea => {
     const bounds = viewport.getBoundingClientRect();
@@ -312,8 +340,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (!source || !target) {
         continue;
       }
+      const prerequisite = edge.dataset.edgeKind !== "related";
       const start = connectionPoint(source, target, 4);
-      const end = connectionPoint(target, source, 14);
+      const end = connectionPoint(target, source, prerequisite ? 14 : 4);
       const dx = end.x - start.x;
       const dy = end.y - start.y;
       const distance = Math.hypot(dx, dy) || 1;
@@ -325,13 +354,13 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         x: end.x - directionX * arrowLength,
         y: end.y - directionY * arrowLength,
       };
-      edge.setAttribute(
-        "d",
-        `M ${start.x} ${start.y} L ${arrowBase.x} ${arrowBase.y}`,
-      );
       const edgeId = edge.dataset.knowledgeEdge;
       const arrow = edgeId ? edgeArrowsById.get(edgeId) : undefined;
       if (arrow) {
+        edge.setAttribute(
+          "d",
+          `M ${start.x} ${start.y} L ${arrowBase.x} ${arrowBase.y}`,
+        );
         const perpendicularX = -directionY;
         const perpendicularY = directionX;
         arrow.setAttribute(
@@ -341,6 +370,11 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
             `${arrowBase.x + perpendicularX * arrowHalfWidth},${arrowBase.y + perpendicularY * arrowHalfWidth}`,
             `${arrowBase.x - perpendicularX * arrowHalfWidth},${arrowBase.y - perpendicularY * arrowHalfWidth}`,
           ].join(" "),
+        );
+      } else {
+        edge.setAttribute(
+          "d",
+          `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
         );
       }
     }
@@ -516,7 +550,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const createReaderNavSection = (
     label: string,
     relations: ReaderRelation[],
-    direction: "previous" | "next",
+    direction: "previous" | "next" | "related",
   ): HTMLElement => {
     const section = document.createElement("section");
     section.className = "kg-reader-nav-section";
@@ -553,6 +587,19 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   };
 
   const renderReaderNavigation = (nodeId: string): void => {
+    if (contextualRelationships) {
+      const related = relationIds(
+        nodeId,
+        "[data-knowledge-related]",
+      ).flatMap((relationId) => {
+        const relation = resolveReaderRelation(relationId);
+        return relation ? [relation] : [];
+      });
+      readerNavigation.replaceChildren(
+        createReaderNavSection(ui.related, related, "related"),
+      );
+      return;
+    }
     const previous = relationIds(
       nodeId,
       "[data-knowledge-previous]",

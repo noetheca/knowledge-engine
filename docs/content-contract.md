@@ -73,9 +73,24 @@ base-aware concept URLs to `createKnowledgeGraphModel`.
 
 The view model does not derive or join public URLs. A stored prerequisite from
 concept A to concept B means “A requires B”; the rendered directional edge is
-therefore B → A. Related links are omitted from the view model when the same
+therefore B → A. Related links are non-directional in the presentation model:
+if either concept declares the other, both concept inspectors expose the pair
+and the map creates one arrowless edge. Related links are omitted when the same
 pair already has a prerequisite edge, so the stronger relationship is not
 drawn or announced twice.
+
+Large layers are wrapped into a compact grid rather than an unbounded row. The
+map hides non-directional related edges until either endpoint is selected,
+which keeps dense contextual domains readable while preserving their
+connections.
+
+`KnowledgeGraph` defaults to prerequisite-oriented navigation. A domain whose
+content is contextual rather than curricular may set
+`relationshipMode="contextual"` and provide localized `labels`. This changes
+the visible vocabulary and reader navigation without reinterpreting a generic
+`related` link as a verified historical influence or contemporaneous relation.
+More specific claims belong in a domain-owned, sourced relation model rather
+than in UI labels alone.
 
 The interactive map is an enhancement. Consumers must render the shared list
 view from the same model so every concept and concept URL remains available

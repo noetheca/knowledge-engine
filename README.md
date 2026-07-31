@@ -10,7 +10,8 @@ This bootstrap release intentionally keeps the package small:
 - validate stable IDs, references, prerequisite cycles, locale metadata, local
   links, and unsafe Markdown;
 - emit a portable JSON manifest;
-- provide minimal Astro layout and relation components.
+- provide shared Astro layout, article relation, and interactive graph
+  components with domain-specific relationship vocabulary.
 
 Astro is a peer dependency. Domain repositories own their content and thin
 site configuration; this repository owns shared behavior.

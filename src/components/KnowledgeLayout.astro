@@ -1,13 +1,7 @@
 ---
 import "../styles/base.css";
 import { getUiStrings } from "../i18n/ui";
-
-interface LanguageOption {
-  id: string;
-  label: string;
-  locale: string;
-  href?: string;
-}
+import type { KnowledgeLanguageOption } from "../types";
 
 interface Props {
   title: string;
@@ -16,7 +10,7 @@ interface Props {
   canonicalPath?: string;
   immersive?: boolean;
   domain?: string;
-  languages?: readonly LanguageOption[];
+  languages?: readonly KnowledgeLanguageOption[];
 }
 
 const {

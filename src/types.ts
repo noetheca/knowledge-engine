@@ -8,6 +8,13 @@ export const CONTENT_STATUSES = [
 
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 
+export interface KnowledgeLanguageOption {
+  id: string;
+  label: string;
+  locale: string;
+  href?: string;
+}
+
 export interface ConceptMetadata {
   schemaVersion: number;
   id: string;

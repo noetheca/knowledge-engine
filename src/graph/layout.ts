@@ -28,6 +28,7 @@ export interface KnowledgeGraphLayoutOptions {
   columnGap?: number;
   rowGap?: number;
   padding?: number;
+  maxColumns?: number;
 }
 
 export function layoutKnowledgeGraph(
@@ -90,19 +91,33 @@ export function layoutKnowledgeGraph(
   const orderedLayers = [...layers.entries()].sort(
     ([left], [right]) => left - right,
   );
-  const maxColumns = Math.max(
-    ...orderedLayers.map(([, nodeIds]) => nodeIds.length),
+  const columnLimit = Math.max(
+    1,
+    Math.floor(
+      options.maxColumns ?? Math.ceil(Math.sqrt(graph.nodes.length)),
+    ),
+  );
+  const rows = orderedLayers.flatMap(([, nodeIds]) => {
+    const layerRows: string[][] = [];
+    for (let index = 0; index < nodeIds.length; index += columnLimit) {
+      layerRows.push(nodeIds.slice(index, index + columnLimit));
+    }
+    return layerRows;
+  });
+  const widestRowColumns = Math.max(
+    ...rows.map((nodeIds) => nodeIds.length),
   );
   const contentWidth =
-    maxColumns * nodeWidth + Math.max(0, maxColumns - 1) * columnGap;
+    widestRowColumns * nodeWidth +
+    Math.max(0, widestRowColumns - 1) * columnGap;
   const width = contentWidth + padding * 2;
   const height =
-    orderedLayers.length * nodeHeight +
-    Math.max(0, orderedLayers.length - 1) * rowGap +
+    rows.length * nodeHeight +
+    Math.max(0, rows.length - 1) * rowGap +
     padding * 2;
 
   const nodes: KnowledgeGraphLayoutNode[] = [];
-  for (const [row, [, nodeIds]] of orderedLayers.entries()) {
+  for (const [row, nodeIds] of rows.entries()) {
     const layerWidth =
       nodeIds.length * nodeWidth + Math.max(0, nodeIds.length - 1) * columnGap;
     const startX = padding + (contentWidth - layerWidth) / 2;
@@ -157,9 +172,10 @@ export function layoutKnowledgeGraph(
       x: sourceCenter.x + direction.x * (sourceRadius + 4),
       y: sourceCenter.y + direction.y * (sourceRadius + 4),
     };
+    const targetGap = edge.kind === "prerequisite" ? 14 : 4;
     const targetPoint = {
-      x: targetCenter.x - direction.x * (targetRadius + 14),
-      y: targetCenter.y - direction.y * (targetRadius + 14),
+      x: targetCenter.x - direction.x * (targetRadius + targetGap),
+      y: targetCenter.y - direction.y * (targetRadius + targetGap),
     };
     return {
       ...edge,

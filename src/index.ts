@@ -27,6 +27,7 @@ export {
   type ConceptTranslation,
   type ContentStatus,
   type KnowledgeBase,
+  type KnowledgeLanguageOption,
   type KnowledgeManifest,
   type ManifestConcept,
   type ManifestLocale,

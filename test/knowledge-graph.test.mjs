@@ -55,6 +55,22 @@ test("suppresses related links when a prerequisite edge already connects a pair"
   );
 });
 
+test("creates one undirected edge for a related pair", () => {
+  const graph = createKnowledgeGraphModel([
+    node("left", { related: ["right"] }),
+    node("right"),
+  ]);
+
+  assert.deepEqual(
+    graph.edges.map(({ source, target, kind }) => [source, target, kind]),
+    [["left", "right", "related"]],
+  );
+  assert.deepEqual(
+    graph.nodes.map(({ related }) => related),
+    [["right"], ["left"]],
+  );
+});
+
 test("rejects duplicate nodes and missing prerequisites", () => {
   assert.throws(
     () => createKnowledgeGraphModel([node("same"), node("same")]),
@@ -96,4 +112,15 @@ test("refuses to lay out a prerequisite cycle", () => {
     () => layoutKnowledgeGraph(graph),
     /Cannot lay out prerequisite cycle/,
   );
+});
+
+test("wraps a large root layer into a compact grid", () => {
+  const graph = createKnowledgeGraphModel(
+    Array.from({ length: 49 }, (_, index) => node(`node-${index}`)),
+  );
+  const layout = layoutKnowledgeGraph(graph);
+  const distinctRows = new Set(layout.nodes.map(({ y }) => y));
+
+  assert.equal(distinctRows.size, 7);
+  assert.equal(layout.width, 2032);
 });

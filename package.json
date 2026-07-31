@@ -22,7 +22,9 @@
     "src/client",
     "src/components",
     "src/graph",
+    "src/i18n",
     "src/styles",
+    "src/types.ts",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
   ],

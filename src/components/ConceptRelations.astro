@@ -8,6 +8,7 @@ interface Relation {
 interface Props {
   prerequisites?: Relation[];
   related?: Relation[];
+  mode?: "prerequisite" | "contextual";
   labels?: {
     prerequisites: string;
     related: string;
@@ -19,6 +20,7 @@ interface Props {
 const {
   prerequisites = [],
   related = [],
+  mode = "prerequisite",
   labels = {
     prerequisites: "前提知識",
     related: "関連知識",
@@ -27,10 +29,12 @@ const {
   ariaLabel = "知識の関係",
 } = Astro.props;
 
-const groups = [
-  { title: labels.prerequisites, entries: prerequisites },
-  { title: labels.related, entries: related },
-];
+const groups = mode === "contextual"
+  ? [{ title: labels.related, entries: related }]
+  : [
+      { title: labels.prerequisites, entries: prerequisites },
+      { title: labels.related, entries: related },
+    ];
 ---
 
 <aside class="relations" aria-label={ariaLabel}>

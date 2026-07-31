@@ -21,6 +21,7 @@ export interface UiStrings {
     interactionHint: string;
     viewportLabel: string;
     legend: string;
+    relatedLegend: string;
     inspectorLabel: string;
     accessibleList: string;
     knowledgeList: string;
@@ -44,6 +45,15 @@ export interface UiStrings {
     loadingArticle: string;
     articleLoadFailed: string;
     openDirectly: string;
+  };
+  article: {
+    relationsLabel: string;
+    prerequisites: string;
+    related: string;
+    noRelations: string;
+    sources: string;
+    sourcesPending: string;
+    reportIssue: string;
   };
 }
 
@@ -73,6 +83,7 @@ const stringsByLocale: Record<string, UiStrings> = {
       interactionHint: "背景をドラッグで移動・ノードは直接ドラッグ",
       viewportLabel: "前提知識を上から下へ示す知識マップ",
       legend: "実線は「前提知識 → 次に学ぶ知識」を示します",
+      relatedLegend: "点線は選択した知識の関連を示します",
       inspectorLabel: "選択した知識の詳細",
       accessibleList: "アクセシブルな一覧",
       knowledgeList: "知識一覧",
@@ -96,6 +107,15 @@ const stringsByLocale: Record<string, UiStrings> = {
       loadingArticle: "記事を読み込んでいます…",
       articleLoadFailed: "記事を読み込めませんでした。",
       openDirectly: "通常のページで開く",
+    },
+    article: {
+      relationsLabel: "知識の関係",
+      prerequisites: "前提知識",
+      related: "関連知識",
+      noRelations: "登録されていません",
+      sources: "出典・確認元",
+      sourcesPending: "公開前に確認元を追加する必要があります。",
+      reportIssue: "問題を報告",
     },
   },
   en: {
@@ -123,6 +143,7 @@ const stringsByLocale: Record<string, UiStrings> = {
       interactionHint: "Drag the canvas to move; drag nodes directly",
       viewportLabel: "Knowledge map ordered from prerequisites to later concepts",
       legend: "Solid lines show “prerequisite → next concept”",
+      relatedLegend: "Dotted lines show relations for the selected concept",
       inspectorLabel: "Selected knowledge details",
       accessibleList: "Accessible list",
       knowledgeList: "Knowledge list",
@@ -146,6 +167,15 @@ const stringsByLocale: Record<string, UiStrings> = {
       loadingArticle: "Loading article…",
       articleLoadFailed: "The article could not be loaded.",
       openDirectly: "Open the regular page",
+    },
+    article: {
+      relationsLabel: "Knowledge relationships",
+      prerequisites: "Prerequisites",
+      related: "Related knowledge",
+      noRelations: "None registered",
+      sources: "Sources and verification",
+      sourcesPending: "Sources must be added before publication.",
+      reportIssue: "Report an issue",
     },
   },
 };

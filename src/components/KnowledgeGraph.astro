@@ -1,24 +1,51 @@
 ---
 import type { KnowledgeGraphModel } from "../graph/model";
 import { layoutKnowledgeGraph } from "../graph/layout";
-import { getUiStrings } from "../i18n/ui";
+import { getUiStrings, type UiStrings } from "../i18n/ui";
 import "../styles/knowledge-graph.css";
+
+type KnowledgeGraphLabels = Partial<
+  Omit<UiStrings["graph"], "status">
+> & {
+  status?: Partial<UiStrings["graph"]["status"]>;
+};
 
 interface Props {
   graph: KnowledgeGraphModel;
   title?: string;
   locale?: string;
+  labels?: KnowledgeGraphLabels;
+  relationshipMode?: "prerequisite" | "contextual";
+  initialView?: "map" | "list" | "responsive";
 }
 
 const {
   graph,
   title = "Knowledge Map",
   locale = "ja",
+  labels,
+  relationshipMode = "prerequisite",
+  initialView = "map",
 } = Astro.props;
-const ui = getUiStrings(locale);
+const defaultUi = getUiStrings(locale);
+const ui = {
+  ...defaultUi,
+  graph: {
+    ...defaultUi.graph,
+    ...labels,
+    status: {
+      ...defaultUi.graph.status,
+      ...labels?.status,
+    },
+  },
+};
 const layout = layoutKnowledgeGraph(graph);
 const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 const positionsById = new Map(layout.nodes.map((node) => [node.id, node]));
+const hasPrerequisiteEdges = graph.edges.some(
+  ({ kind }) => kind === "prerequisite",
+);
+const hasRelatedEdges = graph.edges.some(({ kind }) => kind === "related");
 const resolveNodes = (ids: string[]) =>
   ids.flatMap((id) => {
     const node = nodesById.get(id);
@@ -31,7 +58,10 @@ const statusLabels = ui.graph.status;
   class="knowledge-graph"
   data-knowledge-graph
   data-locale={locale}
-  data-view="map"
+  data-initial-view={initialView}
+  data-relationship-mode={relationshipMode}
+  data-ui={JSON.stringify(ui.graph)}
+  data-view={initialView === "list" ? "list" : "map"}
   aria-label={title}
 >
   <div class="kg-shell">
@@ -76,16 +106,21 @@ const statusLabels = ui.graph.status;
                       data-knowledge-edge={edge.id}
                       data-edge-source={edge.source}
                       data-edge-target={edge.target}
+                      data-edge-kind={edge.kind}
                       data-target-status={nodesById.get(edge.target)?.status}
                     />
-                    <polygon
-                      class="kg-edge-arrow"
-                      data-knowledge-arrow={edge.id}
-                      data-edge-source={edge.source}
-                      data-edge-target={edge.target}
-                      data-target-status={nodesById.get(edge.target)?.status}
-                      points=""
-                    />
+                    {
+                      edge.kind === "prerequisite" && (
+                        <polygon
+                          class="kg-edge-arrow"
+                          data-knowledge-arrow={edge.id}
+                          data-edge-source={edge.source}
+                          data-edge-target={edge.target}
+                          data-target-status={nodesById.get(edge.target)?.status}
+                          points=""
+                        />
+                      )
+                    }
                   </g>
                 ))
               }
@@ -112,10 +147,32 @@ const statusLabels = ui.graph.status;
             }
           </div>
         </div>
-        <p class="kg-legend">
-          <span aria-hidden="true"></span>
-          {ui.graph.legend}
-        </p>
+        {
+          (hasPrerequisiteEdges || hasRelatedEdges) && (
+            <p class="kg-legend">
+              {hasPrerequisiteEdges && (
+                <span class="kg-legend__item">
+                  <span
+                    class="kg-legend__sample"
+                    data-edge-kind="prerequisite"
+                    aria-hidden="true"
+                  />
+                  {ui.graph.legend}
+                </span>
+              )}
+              {hasRelatedEdges && (
+                <span class="kg-legend__item">
+                  <span
+                    class="kg-legend__sample"
+                    data-edge-kind="related"
+                    aria-hidden="true"
+                  />
+                  {ui.graph.relatedLegend}
+                </span>
+              )}
+            </p>
+          )
+        }
       </div>
 
       <aside
@@ -216,52 +273,60 @@ const statusLabels = ui.graph.status;
           <h2>{node.title}</h2>
           <p class="kg-detail__summary">{node.summary}</p>
 
-          <section data-knowledge-previous>
-            <h3>{ui.graph.prerequisites}</h3>
-            {node.prerequisites.length > 0 ? (
-              <ul>
-                {resolveNodes(node.prerequisites).map((relation) => (
-                  <li>
-                    <button type="button" data-select-node={relation.id}>
-                      {relation.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p class="kg-none">{ui.graph.noPrerequisites}</p>
-            )}
-          </section>
+          {relationshipMode === "prerequisite" && (
+            <>
+              <section data-knowledge-previous>
+                <h3>{ui.graph.prerequisites}</h3>
+                {node.prerequisites.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.prerequisites).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noPrerequisites}</p>
+                )}
+              </section>
 
-          <section data-knowledge-next>
-            <h3>{ui.graph.dependents}</h3>
-            {node.dependents.length > 0 ? (
-              <ul>
-                {resolveNodes(node.dependents).map((relation) => (
-                  <li>
-                    <button type="button" data-select-node={relation.id}>
-                      {relation.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p class="kg-none">{ui.graph.noDependents}</p>
-            )}
-          </section>
+              <section data-knowledge-next>
+                <h3>{ui.graph.dependents}</h3>
+                {node.dependents.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.dependents).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noDependents}</p>
+                )}
+              </section>
+            </>
+          )}
 
-          {node.related.length > 0 && (
-            <section>
+          {(relationshipMode === "contextual" || node.related.length > 0) && (
+            <section data-knowledge-related>
               <h3>{ui.graph.related}</h3>
-              <ul>
-                {resolveNodes(node.related).map((relation) => (
-                  <li>
-                    <button type="button" data-select-node={relation.id}>
-                      {relation.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {node.related.length > 0 ? (
+                <ul>
+                  {resolveNodes(node.related).map((relation) => (
+                    <li>
+                      <button type="button" data-select-node={relation.id}>
+                        {relation.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p class="kg-none">{ui.graph.noKnowledge}</p>
+              )}
             </section>
           )}
 

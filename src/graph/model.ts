@@ -18,7 +18,7 @@ export interface KnowledgeGraphEdge {
   id: string;
   source: string;
   target: string;
-  kind: "prerequisite";
+  kind: "prerequisite" | "related";
 }
 
 export interface KnowledgeGraphModel {
@@ -61,6 +61,28 @@ export function createKnowledgeGraphModel(
   const dependentIds = new Map<string, string[]>(
     inputs.map(({ id }) => [id, []]),
   );
+  const relatedIds = new Map<string, string[]>(
+    inputs.map(({ id }) => [id, []]),
+  );
+  const addRelated = (source: string, target: string): void => {
+    const entries = relatedIds.get(source);
+    if (entries && !entries.includes(target)) {
+      entries.push(target);
+    }
+  };
+  for (const input of inputs) {
+    for (const related of unique(input.related)) {
+      if (
+        !ids.has(related) ||
+        related === input.id ||
+        prerequisitePairs.has(pairKey(input.id, related))
+      ) {
+        continue;
+      }
+      addRelated(input.id, related);
+      addRelated(related, input.id);
+    }
+  }
   const edges: KnowledgeGraphEdge[] = [];
 
   const nodes: KnowledgeGraphNode[] = inputs.map((input) => {
@@ -80,12 +102,7 @@ export function createKnowledgeGraphModel(
     return {
       ...input,
       prerequisites,
-      related: unique(input.related).filter((related) => {
-        if (!ids.has(related) || related === input.id) {
-          return false;
-        }
-        return !prerequisitePairs.has(pairKey(input.id, related));
-      }),
+      related: relatedIds.get(input.id) ?? [],
       dependents: [] as string[],
     };
   });
@@ -97,6 +114,29 @@ export function createKnowledgeGraphModel(
         (order.get(left) ?? Number.MAX_SAFE_INTEGER) -
         (order.get(right) ?? Number.MAX_SAFE_INTEGER),
     );
+  }
+
+  const relatedPairs = new Set<string>();
+  for (const node of nodes) {
+    for (const related of node.related) {
+      const key = pairKey(node.id, related);
+      if (relatedPairs.has(key)) {
+        continue;
+      }
+      relatedPairs.add(key);
+      const [source, target] = [node.id, related].sort();
+      if (!source || !target) {
+        continue;
+      }
+      edges.push({
+        id:
+          `related:${encodeURIComponent(source)}:` +
+          encodeURIComponent(target),
+        source,
+        target,
+        kind: "related",
+      });
+    }
   }
 
   return { nodes, edges };
