@@ -1,5 +1,6 @@
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2.4;
+const CAMERA_TRANSITION_DURATION_MS = 300;
 
 import { getUiStrings } from "../i18n/ui.js";
 
@@ -222,6 +223,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let nodeDrag: NodeDrag | undefined;
   let suppressNodeClickUntil = 0;
   let inspectorPositionFrame = 0;
+  let cameraAnimationFrame = 0;
   let simulationFrame = 0;
   let simulationTicks = 0;
   let simulationAnchorId: string | undefined;
@@ -347,6 +349,56 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       `translate(${transform.x}px, ${transform.y}px) ` +
       `scale(${transform.scale})`;
     scheduleInspectorPosition();
+  };
+
+  const cancelCameraAnimation = (): void => {
+    if (cameraAnimationFrame) {
+      cancelAnimationFrame(cameraAnimationFrame);
+      cameraAnimationFrame = 0;
+    }
+    delete root.dataset.cameraMoving;
+  };
+
+  const moveCameraBy = (
+    deltaX: number,
+    deltaY: number,
+    smooth = false,
+  ): void => {
+    cancelCameraAnimation();
+    const startX = transform.x;
+    const startY = transform.y;
+    const targetX = startX + deltaX;
+    const targetY = startY + deltaY;
+    if (!smooth || reducedMotionQuery.matches) {
+      transform.x = targetX;
+      transform.y = targetY;
+      renderTransform();
+      return;
+    }
+
+    const startedAt = performance.now();
+    root.dataset.cameraMoving = "";
+    const step = (timestamp: number): void => {
+      const progress = clamp(
+        (timestamp - startedAt) / CAMERA_TRANSITION_DURATION_MS,
+        0,
+        1,
+      );
+      const eased =
+        progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      transform.x = startX + (targetX - startX) * eased;
+      transform.y = startY + (targetY - startY) * eased;
+      renderTransform();
+      if (progress < 1) {
+        cameraAnimationFrame = requestAnimationFrame(step);
+        return;
+      }
+      cameraAnimationFrame = 0;
+      delete root.dataset.cameraMoving;
+    };
+    cameraAnimationFrame = requestAnimationFrame(step);
   };
 
   const connectionPoint = (
@@ -985,6 +1037,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const openReader = async (
     href: string,
     trigger: HTMLElement,
+    smoothCamera = false,
   ): Promise<void> => {
     readerRequest?.abort();
     const request = new AbortController();
@@ -999,7 +1052,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     syncReaderModality();
     const selectedNode = selectedNodeElement();
     if (selectedNode && !readerModalQuery.matches) {
-      requestAnimationFrame(() => centerNodeBesideReader(selectedNode));
+      requestAnimationFrame(() =>
+        centerNodeBesideReader(selectedNode, smoothCamera),
+      );
     }
     showReaderMessage(ui.loadingArticle, "kg-reader-loading");
     const selectedNodeId = root.dataset.selectedNode;
@@ -1071,6 +1126,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     clientX: number,
     clientY: number,
   ): void => {
+    cancelCameraAnimation();
     const bounds = viewport.getBoundingClientRect();
     const pointX = clientX - bounds.left;
     const pointY = clientY - bounds.top;
@@ -1083,6 +1139,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   };
 
   const fit = (): void => {
+    cancelCameraAnimation();
     const bounds = viewport.getBoundingClientRect();
     if (bounds.width === 0 || bounds.height === 0) {
       return;
@@ -1140,6 +1197,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const centerNodeBesideReader = (
     node: HTMLButtonElement,
+    smoothCamera = false,
   ): void => {
     if (readerModalQuery.matches) {
       return;
@@ -1160,17 +1218,22 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       viewportBounds.top +
       safe.top +
       (viewportBounds.height - safe.top - safe.bottom) / 2;
-    transform.x += targetX - (nodeBounds.left + nodeBounds.right) / 2;
-    transform.y += targetY - (nodeBounds.top + nodeBounds.bottom) / 2;
-    renderTransform();
+    moveCameraBy(
+      targetX - (nodeBounds.left + nodeBounds.right) / 2,
+      targetY - (nodeBounds.top + nodeBounds.bottom) / 2,
+      smoothCamera,
+    );
   };
 
-  const centerSelection = (node: HTMLButtonElement): void => {
+  const centerSelection = (
+    node: HTMLButtonElement,
+    smoothCamera = false,
+  ): void => {
     if (
       root.dataset.readerOpen !== undefined &&
       !readerModalQuery.matches
     ) {
-      centerNodeBesideReader(node);
+      centerNodeBesideReader(node, smoothCamera);
       return;
     }
     positionInspector(node);
@@ -1191,9 +1254,11 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       safe.top +
       (viewportBounds.height - safe.top - safe.bottom) / 2;
 
-    transform.x += targetX - (unionLeft + unionRight) / 2;
-    transform.y += targetY - (unionTop + unionBottom) / 2;
-    renderTransform();
+    moveCameraBy(
+      targetX - (unionLeft + unionRight) / 2,
+      targetY - (unionTop + unionBottom) / 2,
+      smoothCamera,
+    );
     requestAnimationFrame(() => positionInspector(node));
   };
 
@@ -1218,7 +1283,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     delete root.dataset.selectedNode;
   };
 
-  const selectNode = (nodeId: string): void => {
+  const selectNode = (nodeId: string, smoothCamera = false): void => {
     const template = root.querySelector<HTMLTemplateElement>(
       `template[data-knowledge-detail="${CSS.escape(nodeId)}"]`,
     );
@@ -1266,12 +1331,14 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (href) {
         const destination = new URL(href, window.location.href);
         if (destination.origin === window.location.origin) {
-          void openReader(destination.href, selectedNode);
+          void openReader(destination.href, selectedNode, smoothCamera);
         }
       }
     }
     requestAnimationFrame(() => {
-      centerSelection(selectedNode);
+      if (root.dataset.readerOpen === undefined) {
+        centerSelection(selectedNode, smoothCamera);
+      }
       if (root.dataset.readerOpen !== undefined) {
         readerPanel.focus({ preventScroll: true });
       } else {
@@ -1308,7 +1375,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       const destination = new URL(readerLink.href, window.location.href);
       if (destination.origin === window.location.origin) {
         event.preventDefault();
-        selectNode(nodeId);
+        selectNode(nodeId, true);
       }
       return;
     }
@@ -1324,7 +1391,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     const nodeId =
       node?.dataset.knowledgeNode ?? relation?.dataset.selectNode ?? "";
     if (nodeId) {
-      selectNode(nodeId);
+      selectNode(nodeId, Boolean(relation && !node));
     }
   });
 
@@ -1433,6 +1500,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (event.button !== 0 && event.pointerType === "mouse") {
       return;
     }
+    cancelCameraAnimation();
     const target = event.target;
     const node =
       target instanceof Element
