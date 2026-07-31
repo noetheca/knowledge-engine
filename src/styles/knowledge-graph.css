@@ -113,6 +113,11 @@
   transition: opacity 120ms ease, stroke-width 120ms ease;
 }
 
+.kg-edges path[data-target-status="draft"] {
+  stroke-dasharray: 9 7;
+  stroke-width: 2;
+}
+
 .kg-edge-arrow {
   fill: var(--text);
   opacity: 1;
@@ -131,6 +136,10 @@
 
 .knowledge-graph[data-selected-node] .kg-edges path.is-connected {
   stroke-width: 5;
+}
+
+.knowledge-graph[data-selected-node] .kg-edges path.is-connected[data-target-status="draft"] {
+  stroke-width: 2;
 }
 
 .kg-node {
@@ -161,13 +170,6 @@
   -webkit-line-clamp: 2;
 }
 
-.kg-node__status {
-  font-size: 0.65rem;
-  font-weight: 750;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
 .kg-node:hover {
   border-width: 3px;
 }
@@ -175,6 +177,13 @@
 .kg-node:active {
   box-shadow: 0 4px 0 var(--shadow);
   transform: translateY(6px);
+}
+
+.kg-node[data-status="draft"],
+.kg-node[data-status="draft"]:active {
+  border-style: dashed;
+  box-shadow: none;
+  transform: none;
 }
 
 .kg-node[data-selected] {
@@ -437,8 +446,8 @@
 }
 
 .kg-cta-shadow::before {
-  background: #ffffff;
-  border: 2px solid #090909;
+  background: var(--surface);
+  border: 2px solid var(--text);
   border-radius: 1rem;
   content: "";
   inset: 0;

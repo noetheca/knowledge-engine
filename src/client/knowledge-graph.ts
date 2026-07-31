@@ -1,6 +1,8 @@
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2.4;
 
+import { getUiStrings } from "../i18n/ui.js";
+
 interface Transform {
   x: number;
   y: number;
@@ -60,6 +62,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   if (root.dataset.enhanced === "true") {
     return;
   }
+  const ui = getUiStrings(
+    root.dataset.locale ?? document.documentElement.lang,
+  ).graph;
 
   const viewport = root.querySelector<HTMLElement>("[data-graph-viewport]");
   const world = root.querySelector<HTMLElement>("[data-graph-world]");
@@ -523,7 +528,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (relations.length === 0) {
       const empty = document.createElement("p");
       empty.className = "kg-reader-nav-empty";
-      empty.textContent = "該当する知識はありません";
+      empty.textContent = ui.noKnowledge;
       section.append(empty);
       return section;
     }
@@ -563,8 +568,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return relation ? [relation] : [];
     });
     readerNavigation.replaceChildren(
-      createReaderNavSection("前へ", previous, "previous"),
-      createReaderNavSection("次へ", next, "next"),
+      createReaderNavSection(ui.previous, previous, "previous"),
+      createReaderNavSection(ui.next, next, "next"),
     );
   };
 
@@ -605,7 +610,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     if (selectedNode && !readerModalQuery.matches) {
       requestAnimationFrame(() => centerNodeBesideReader(selectedNode));
     }
-    showReaderMessage("記事を読み込んでいます…", "kg-reader-loading");
+    showReaderMessage(ui.loadingArticle, "kg-reader-loading");
     const selectedNodeId = root.dataset.selectedNode;
     if (selectedNodeId) {
       renderReaderNavigation(selectedNodeId);
@@ -654,12 +659,12 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         return;
       }
       const errorMessage = showReaderMessage(
-        "記事を読み込めませんでした。",
+        ui.articleLoadFailed,
         "kg-reader-error",
       );
       const directLink = document.createElement("a");
       directLink.href = href;
-      directLink.textContent = "通常のページで開く";
+      directLink.textContent = ui.openDirectly;
       errorMessage.append(document.createElement("br"), directLink);
       readerPanel.setAttribute("aria-busy", "false");
       console.error(error);
@@ -933,7 +938,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     clearSelection();
     root.dataset.view = showList ? "list" : "map";
     viewButton.setAttribute("aria-pressed", String(showList));
-    viewButton.textContent = showList ? "マップ" : "一覧";
+    viewButton.textContent = showList ? ui.map : ui.list;
     if (!showList) {
       requestAnimationFrame(fit);
     }

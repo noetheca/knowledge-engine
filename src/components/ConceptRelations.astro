@@ -13,6 +13,7 @@ interface Props {
     related: string;
     empty: string;
   };
+  ariaLabel?: string;
 }
 
 const {
@@ -23,6 +24,7 @@ const {
     related: "関連知識",
     empty: "登録されていません",
   },
+  ariaLabel = "知識の関係",
 } = Astro.props;
 
 const groups = [
@@ -31,7 +33,7 @@ const groups = [
 ];
 ---
 
-<aside class="relations" aria-label="知識の関係">
+<aside class="relations" aria-label={ariaLabel}>
   {
     groups.map(({ title, entries }) => (
       <section>

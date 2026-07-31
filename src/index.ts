@@ -33,3 +33,7 @@ export {
   type TranslationMetadata,
   type ValidationIssue,
 } from "./types.js";
+export {
+  getUiStrings,
+  type UiStrings,
+} from "./i18n/ui.js";
