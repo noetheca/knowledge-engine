@@ -545,12 +545,12 @@
 
 .kg-reader-content .content-state {
   align-items: center;
-  border-block: 1px solid var(--line);
+  border-top: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem 1rem;
   margin-block: 3rem 0;
-  padding-block: 0.8rem;
+  padding-block: 0.8rem 0;
 }
 
 .kg-reader-loading,
