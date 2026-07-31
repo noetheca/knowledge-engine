@@ -13,8 +13,11 @@ concepts/<directory>/
 └─ assets/
 ```
 
-The directory is organizational only. A concept ID is read from metadata and is
-never derived from a title, path, locale, or public URL.
+The directory is organizational only and does not need to resemble the concept
+ID. Moving or renaming a concept directory must not change its ID,
+relationships, or manifest semantics. Consumers match discovered translation
+files to `concept.yaml`; they must never derive an ID by trimming a path,
+filename, locale, title, or public URL.
 
 ## `concept.yaml`
 

@@ -1,6 +1,11 @@
 export { loadKnowledgeBase } from "./load.js";
 export { createManifest } from "./manifest.js";
 export {
+  createTranslationFileIndex,
+  normalizeTranslationFilePath,
+  type TranslationFileRecord,
+} from "./translation-index.js";
+export {
   CONTENT_SCHEMA_VERSION,
   CONTENT_STATUSES,
   type Concept,
