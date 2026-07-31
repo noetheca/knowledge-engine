@@ -129,6 +129,7 @@ function settleContextualNodes(
   nodeHeight: number,
   collisionGap: number,
   chronology: Readonly<Record<string, number>>,
+  verticalAnchors?: ReadonlyMap<string, number>,
 ): void {
   const simulatedById = new Map(
     simulationNodes.map((node) => [node.id, node]),
@@ -157,6 +158,19 @@ function settleContextualNodes(
     Math.sqrt(Math.max(1, simulationNodes.length)) *
     (nodeHeight + collisionGap) *
     1.12;
+  const chronologyTargets = simulationNodes.flatMap((node) => {
+    const anchoredY = verticalAnchors?.get(node.id);
+    if (Number.isFinite(anchoredY)) {
+      return [{ node, targetY: anchoredY as number }];
+    }
+    const rank = chronology[node.id];
+    if (!Number.isFinite(rank)) {
+      return [];
+    }
+    const rankRatio =
+      rankRange > 0 ? ((rank as number) - rankMinimum) / rankRange : 0.5;
+    return [{ node, targetY: (rankRatio - 0.5) * chronologyHeight }];
+  });
 
   for (let tick = 0; tick < ticks; tick += 1) {
     const cooling = 0.18 + (1 - tick / ticks) * 0.82;
@@ -188,6 +202,56 @@ function settleContextualNodes(
         const verticalForce = verticalError * 0.007 * cooling;
         source.velocityY += verticalForce;
         target.velocityY -= verticalForce;
+      }
+    }
+
+    // Treat visible directional lines as narrow obstacles. Only unrelated
+    // nodes move, so the relation itself stays legible and keeps its meaning.
+    for (const edge of activeEdges) {
+      const source = simulatedById.get(edge.source);
+      const target = simulatedById.get(edge.target);
+      if (!source || !target) {
+        continue;
+      }
+      const segmentX = target.x - source.x;
+      const segmentY = target.y - source.y;
+      const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+      if (segmentLengthSquared < 0.001) {
+        continue;
+      }
+      const segmentLength = Math.sqrt(segmentLengthSquared);
+      const clearance = Math.hypot(nodeWidth, nodeHeight) / 2 + 12;
+      for (const node of simulationNodes) {
+        if (node.id === edge.source || node.id === edge.target) {
+          continue;
+        }
+        const projection = Math.max(
+          0,
+          Math.min(
+            1,
+            ((node.x - source.x) * segmentX +
+              (node.y - source.y) * segmentY) /
+              segmentLengthSquared,
+          ),
+        );
+        const closestX = source.x + segmentX * projection;
+        const closestY = source.y + segmentY * projection;
+        let offsetX = node.x - closestX;
+        let offsetY = node.y - closestY;
+        let distance = Math.hypot(offsetX, offsetY);
+        if (distance < 0.001) {
+          const direction = deterministicDirection(node.id, edge.id);
+          const sign = direction.x >= 0 ? 1 : -1;
+          offsetX = (-segmentY / segmentLength) * sign;
+          offsetY = (segmentX / segmentLength) * sign;
+          distance = 1;
+        }
+        if (distance >= clearance) {
+          continue;
+        }
+        const force = (clearance - distance) * 0.045 * cooling;
+        node.velocityX += (offsetX / distance) * force;
+        node.velocityY += (offsetY / distance) * force;
       }
     }
 
@@ -239,10 +303,9 @@ function settleContextualNodes(
       }
     }
 
-    for (const { node, rank } of rankedNodes) {
-      const rankRatio = rankRange > 0 ? (rank - rankMinimum) / rankRange : 0.5;
-      const targetY = (rankRatio - 0.5) * chronologyHeight;
-      node.velocityY += (targetY - node.y) * 0.0065 * cooling;
+    for (const { node, targetY } of chronologyTargets) {
+      const strength = verticalAnchors ? 0.0085 : 0.0065;
+      node.velocityY += (targetY - node.y) * strength * cooling;
     }
 
     for (const node of simulationNodes) {
@@ -256,7 +319,7 @@ function settleContextualNodes(
   }
 }
 
-function enforceChronologyBands(
+function seedChronologyBands(
   simulationNodes: SimulationNode[],
   edges: KnowledgeGraphEdge[],
   chronology: Readonly<Record<string, number>>,
@@ -329,30 +392,39 @@ function enforceChronologyBands(
       .sort(([left], [right]) => left - right)
       .map(([, group]) => group.sort((left, right) => compareText(left.id, right.id)));
   };
-  const orderedGroups = rankedEntries.flatMap(([, nodes]) =>
+  const rankedContextGroups = rankedEntries.flatMap(([, nodes]) =>
     splitByContextDepth(nodes),
   );
+  const orderedGroups =
+    unrankedNodes.length > 0
+      ? [
+          ...rankedContextGroups,
+          unrankedNodes.sort((left, right) => compareText(left.id, right.id)),
+        ]
+      : rankedContextGroups;
   const bandGap = nodeHeight + collisionGap;
-  const firstBandY = -((orderedGroups.length - 1) * bandGap) / 2;
-  for (const [index, nodes] of orderedGroups.entries()) {
-    const bandY = firstBandY + index * bandGap;
-    for (const node of nodes) {
-      node.y = bandY;
+  const rowCounts = orderedGroups.map((nodes) =>
+    Math.max(1, Math.ceil(Math.sqrt(nodes.length))),
+  );
+  const totalHeight = rowCounts.reduce(
+    (height, rowCount) => height + rowCount * bandGap,
+    0,
+  );
+  let bandTop = -totalHeight / 2;
+  for (const [groupIndex, nodes] of orderedGroups.entries()) {
+    const rowCount = rowCounts[groupIndex] ?? 1;
+    const columnCount = Math.ceil(nodes.length / rowCount);
+    for (const [nodeIndex, node] of nodes.entries()) {
+      const row = Math.floor(nodeIndex / columnCount);
+      node.y = bandTop + (row + 0.5) * bandGap;
       node.velocityY = 0;
     }
+    bandTop += rowCount * bandGap;
   }
 
-  // Concepts without a reliable date belong after the dated chronology. They
-  // share one final band because no relative order can be inferred for them.
-  const lastBandY = firstBandY + (orderedGroups.length - 1) * bandGap;
-  for (const node of unrankedNodes) {
-    node.y = lastBandY + bandGap;
-    node.velocityY = 0;
-  }
-
-  // Chronology owns the vertical axis. Resolve the only remaining collisions
-  // horizontally so neither link forces nor dense same-year groups can invert
-  // the old-to-new order.
+  // Chronology seeds broad vertical cohorts instead of one immutable line.
+  // Same-period concepts start across several rows; the client then treats
+  // these Y positions as soft anchors and can resolve collisions in both axes.
   const horizontalGap = nodeWidth + collisionGap;
   for (let pass = 0; pass < 160; pass += 1) {
     let moved = false;
@@ -483,9 +555,32 @@ function layoutContextualKnowledgeGraph(
     chronology,
   );
 
-  // A final positional collision pass removes tiny residual overlaps without
-  // introducing runtime randomness or changing the graph topology.
-  for (let pass = 0; pass < 80; pass += 1) {
+  seedChronologyBands(
+    simulationNodes,
+    orderedEdges,
+    chronology,
+    nodeWidth,
+    nodeHeight,
+    collisionGap,
+  );
+  const verticalAnchors = new Map(
+    simulationNodes.map(({ id, y }) => [id, y] as const),
+  );
+  settleContextualNodes(
+    simulationNodes,
+    orderedEdges,
+    260,
+    nodeWidth,
+    nodeHeight,
+    collisionGap,
+    chronology,
+    verticalAnchors,
+  );
+
+  // A final positional pass alternates node collision and edge clearance.
+  // Rechecking both constraints prevents resolving one from reintroducing the
+  // other immediately before the server-rendered first paint.
+  for (let pass = 0; pass < 160; pass += 1) {
     let moved = false;
     for (let index = 0; index < simulationNodes.length; index += 1) {
       const first = simulationNodes[index];
@@ -520,19 +615,61 @@ function layoutContextualKnowledgeGraph(
         }
       }
     }
+    const simulatedById = new Map(
+      simulationNodes.map((node) => [node.id, node]),
+    );
+    for (const edge of orderedEdges) {
+      const source = simulatedById.get(edge.source);
+      const target = simulatedById.get(edge.target);
+      if (!source || !target) {
+        continue;
+      }
+      const segmentX = target.x - source.x;
+      const segmentY = target.y - source.y;
+      const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+      if (segmentLengthSquared < 0.001) {
+        continue;
+      }
+      const segmentLength = Math.sqrt(segmentLengthSquared);
+      const clearance = Math.hypot(nodeWidth, nodeHeight) / 2 + 8;
+      for (const node of simulationNodes) {
+        if (node.id === edge.source || node.id === edge.target) {
+          continue;
+        }
+        const projection = Math.max(
+          0,
+          Math.min(
+            1,
+            ((node.x - source.x) * segmentX +
+              (node.y - source.y) * segmentY) /
+              segmentLengthSquared,
+          ),
+        );
+        const closestX = source.x + segmentX * projection;
+        const closestY = source.y + segmentY * projection;
+        let offsetX = node.x - closestX;
+        let offsetY = node.y - closestY;
+        let distance = Math.hypot(offsetX, offsetY);
+        if (distance < 0.001) {
+          const direction = deterministicDirection(node.id, edge.id);
+          const sign = direction.x >= 0 ? 1 : -1;
+          offsetX = (-segmentY / segmentLength) * sign;
+          offsetY = (segmentX / segmentLength) * sign;
+          distance = 1;
+        }
+        if (distance >= clearance) {
+          continue;
+        }
+        moved = true;
+        const shift = clearance - distance + 0.01;
+        node.x += (offsetX / distance) * shift;
+        node.y += (offsetY / distance) * shift;
+      }
+    }
     if (!moved) {
       break;
     }
   }
-
-  enforceChronologyBands(
-    simulationNodes,
-    orderedEdges,
-    chronology,
-    nodeWidth,
-    nodeHeight,
-    collisionGap,
-  );
 
   const minX = Math.min(...simulationNodes.map(({ x }) => x - nodeWidth / 2));
   const minY = Math.min(...simulationNodes.map(({ y }) => y - nodeHeight / 2));

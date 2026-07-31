@@ -520,6 +520,66 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       }
     }
 
+    // Keep unrelated nodes away from visible relationship segments. Directly
+    // dragged nodes remain under the pointer and are corrected after release.
+    for (const connection of connections) {
+      const source = nodePositions.get(connection.source);
+      const target = nodePositions.get(connection.target);
+      if (!source || !target) {
+        continue;
+      }
+      const sourceCenterX = source.x + source.width / 2;
+      const sourceCenterY = source.y + source.height / 2;
+      const targetCenterX = target.x + target.width / 2;
+      const targetCenterY = target.y + target.height / 2;
+      const segmentX = targetCenterX - sourceCenterX;
+      const segmentY = targetCenterY - sourceCenterY;
+      const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+      if (segmentLengthSquared < 0.001) {
+        continue;
+      }
+      const segmentLength = Math.sqrt(segmentLengthSquared);
+      for (const [nodeId, position] of nodePositions) {
+        if (
+          nodeId === connection.source ||
+          nodeId === connection.target ||
+          nodeId === pinnedNodeId
+        ) {
+          continue;
+        }
+        const centerX = position.x + position.width / 2;
+        const centerY = position.y + position.height / 2;
+        const projection = clamp(
+          ((centerX - sourceCenterX) * segmentX +
+            (centerY - sourceCenterY) * segmentY) /
+            segmentLengthSquared,
+          0,
+          1,
+        );
+        const closestX = sourceCenterX + segmentX * projection;
+        const closestY = sourceCenterY + segmentY * projection;
+        let offsetX = centerX - closestX;
+        let offsetY = centerY - closestY;
+        let distance = Math.hypot(offsetX, offsetY);
+        if (distance < 0.001) {
+          const sign = nodeId < `${connection.source}\0${connection.target}`
+            ? -1
+            : 1;
+          offsetX = (-segmentY / segmentLength) * sign;
+          offsetY = (segmentX / segmentLength) * sign;
+          distance = 1;
+        }
+        const clearance =
+          Math.hypot(position.width, position.height) / 2 + 14;
+        if (distance >= clearance) {
+          continue;
+        }
+        const force = (clearance - distance) * 0.018;
+        position.velocityX += (offsetX / distance) * force;
+        position.velocityY += (offsetY / distance) * force;
+      }
+    }
+
     const entries = [...nodePositions.entries()];
     const repulsionRange = 620;
     for (let index = 0; index < entries.length; index += 1) {
@@ -611,20 +671,13 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (chronologyAnchored) {
         const anchorCenterY = chronologyAnchorCentersY.get(nodeId);
         if (anchorCenterY !== undefined) {
-          position.velocityY += (anchorCenterY - centerY) * 0.0011;
+          position.velocityY += (anchorCenterY - centerY) * 0.0032;
         }
       }
       position.velocityX = clamp(position.velocityX * 0.86, -12, 12);
       position.velocityY = clamp(position.velocityY * 0.86, -12, 12);
       position.x += position.velocityX;
       position.y += position.velocityY;
-      if (chronologyAnchored) {
-        const anchorCenterY = chronologyAnchorCentersY.get(nodeId);
-        if (anchorCenterY !== undefined) {
-          position.y = anchorCenterY - position.height / 2;
-          position.velocityY = 0;
-        }
-      }
       maximumMovement = Math.max(
         maximumMovement,
         Math.hypot(position.velocityX, position.velocityY),
@@ -1153,6 +1206,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       "[data-knowledge-edge], [data-knowledge-arrow]",
     )) {
       edge.classList.remove("is-connected", "is-incoming");
+      edge.removeAttribute("data-related-flow");
+      edge.style.removeProperty("--kg-related-length");
     }
     inspector.setAttribute("aria-hidden", "true");
     inspector.replaceChildren();
@@ -1180,14 +1235,27 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     for (const edge of root.querySelectorAll<SVGElement>(
       "[data-knowledge-edge], [data-knowledge-arrow]",
     )) {
-      edge.classList.toggle(
-        "is-connected",
-        edge.dataset.edgeSource === nodeId || edge.dataset.edgeTarget === nodeId,
-      );
+      const connected =
+        edge.dataset.edgeSource === nodeId || edge.dataset.edgeTarget === nodeId;
+      edge.classList.toggle("is-connected", connected);
       edge.classList.toggle(
         "is-incoming",
         edge.dataset.edgeTarget === nodeId,
       );
+      edge.removeAttribute("data-related-flow");
+      edge.style.removeProperty("--kg-related-length");
+      if (
+        connected &&
+        edge instanceof SVGPathElement &&
+        edge.dataset.edgeKind === "related"
+      ) {
+        edge.style.setProperty(
+          "--kg-related-length",
+          `${Math.max(1, edge.getTotalLength())}px`,
+        );
+        edge.dataset.relatedFlow =
+          edge.dataset.edgeSource === nodeId ? "forward" : "reverse";
+      }
     }
 
     inspector.replaceChildren(template.content.cloneNode(true));

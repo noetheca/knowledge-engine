@@ -16,6 +16,27 @@ const node = (id, overrides = {}) => ({
   ...overrides,
 });
 
+const distanceToSegment = (point, start, end) => {
+  const segmentX = end.x - start.x;
+  const segmentY = end.y - start.y;
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY;
+  const projection = lengthSquared > 0
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          ((point.x - start.x) * segmentX +
+            (point.y - start.y) * segmentY) /
+            lengthSquared,
+        ),
+      )
+    : 0;
+  return Math.hypot(
+    point.x - (start.x + segmentX * projection),
+    point.y - (start.y + segmentY * projection),
+  );
+};
+
 test("creates prerequisite edges and reverse dependent relations", () => {
   const graph = createKnowledgeGraphModel([
     node("root"),
@@ -270,6 +291,86 @@ test("places a same-period contextual target below its source", () => {
   const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
 
   assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
+});
+
+test("spreads a dense same-period cohort across several rows", () => {
+  const concepts = Array.from({ length: 10 }, (_, index) =>
+    node(`same-period-${String(index).padStart(2, "0")}`),
+  );
+  const graph = createKnowledgeGraphModel(concepts);
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology: Object.fromEntries(concepts.map(({ id }) => [id, 2010])),
+  });
+  const rows = new Set(layout.nodes.map(({ y }) => Math.round(y)));
+
+  assert.ok(rows.size >= 3);
+  for (let index = 0; index < layout.nodes.length; index += 1) {
+    const first = layout.nodes[index];
+    if (!first) {
+      continue;
+    }
+    for (let comparisonIndex = index + 1; comparisonIndex < layout.nodes.length; comparisonIndex += 1) {
+      const second = layout.nodes[comparisonIndex];
+      if (!second) {
+        continue;
+      }
+      const overlapsX = first.x < second.x + second.width && first.x + first.width > second.x;
+      const overlapsY = first.y < second.y + second.height && first.y + first.height > second.y;
+      assert.equal(overlapsX && overlapsY, false);
+    }
+  }
+});
+
+test("keeps unrelated nodes clear of directional edge segments", () => {
+  const concepts = [
+    node("source"),
+    ...Array.from({ length: 7 }, (_, index) => node(`unrelated-${index}`)),
+    node("target"),
+  ];
+  const graph = createKnowledgeGraphModel(concepts, {
+    contextualRelations: [{ source: "source", target: "target" }],
+  });
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology: {
+      source: 1900,
+      ...Object.fromEntries(
+        concepts
+          .filter(({ id }) => id.startsWith("unrelated-"))
+          .map(({ id }) => [id, 1950]),
+      ),
+      target: 2000,
+    },
+  });
+  const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
+  const source = positions.get("source");
+  const target = positions.get("target");
+  assert.ok(source && target);
+  const sourceCenter = {
+    x: source.x + source.width / 2,
+    y: source.y + source.height / 2,
+  };
+  const targetCenter = {
+    x: target.x + target.width / 2,
+    y: target.y + target.height / 2,
+  };
+
+  for (const concept of concepts.filter(({ id }) => id.startsWith("unrelated-"))) {
+    const position = positions.get(concept.id);
+    assert.ok(position);
+    const clearance = Math.hypot(position.width, position.height) / 2;
+    assert.ok(
+      distanceToSegment(
+        {
+          x: position.x + position.width / 2,
+          y: position.y + position.height / 2,
+        },
+        sourceCenter,
+        targetCenter,
+      ) >= clearance,
+    );
+  }
 });
 
 test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
