@@ -112,8 +112,10 @@ button:focus-visible {
 
 .brand {
   color: var(--text);
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
   font-size: 1.2rem;
-  font-weight: 750;
+  font-weight: 700;
+  padding-inline: 0.15rem;
   text-decoration: none;
 }
 
@@ -157,6 +159,9 @@ button:focus-visible {
 
 .language-toggle {
   align-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-weight: 700;
   list-style: none;
   text-align: center;
 }
