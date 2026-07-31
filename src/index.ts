@@ -1,6 +1,20 @@
 export { loadKnowledgeBase } from "./load.js";
 export { createManifest } from "./manifest.js";
 export {
+  createKnowledgeGraphModel,
+  type KnowledgeGraphEdge,
+  type KnowledgeGraphModel,
+  type KnowledgeGraphNode,
+  type KnowledgeGraphNodeInput,
+} from "./graph/model.js";
+export {
+  layoutKnowledgeGraph,
+  type KnowledgeGraphLayout,
+  type KnowledgeGraphLayoutEdge,
+  type KnowledgeGraphLayoutNode,
+  type KnowledgeGraphLayoutOptions,
+} from "./graph/layout.js";
+export {
   createTranslationFileIndex,
   normalizeTranslationFilePath,
   type TranslationFileRecord,

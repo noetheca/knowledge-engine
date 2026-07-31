@@ -1,0 +1,244 @@
+---
+import type { KnowledgeGraphModel } from "../graph/model";
+import { layoutKnowledgeGraph } from "../graph/layout";
+import "../styles/knowledge-graph.css";
+
+interface Props {
+  graph: KnowledgeGraphModel;
+  title?: string;
+  description?: string;
+}
+
+const {
+  graph,
+  title = "Knowledge Map",
+  description = "前提知識から、次に学ぶ知識へ進む地図です。",
+} = Astro.props;
+const layout = layoutKnowledgeGraph(graph);
+const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+const positionsById = new Map(layout.nodes.map((node) => [node.id, node]));
+const resolveNodes = (ids: string[]) =>
+  ids.flatMap((id) => {
+    const node = nodesById.get(id);
+    return node ? [node] : [];
+  });
+const statusLabels = {
+  draft: "下書き",
+  review: "確認中",
+  published: "公開済み",
+} as const;
+---
+
+<section
+  class="knowledge-graph"
+  data-knowledge-graph
+  data-view="map"
+  aria-labelledby="knowledge-graph-title"
+>
+  <header class="kg-heading">
+    <div>
+      <p class="kg-eyebrow">Mathematics / Knowledge Map</p>
+      <h1 id="knowledge-graph-title">{title}</h1>
+      <p>{description}</p>
+    </div>
+    <p class="kg-count" aria-label={`${graph.nodes.length}件の知識`}>
+      <strong>{String(graph.nodes.length).padStart(2, "0")}</strong>
+      <span>knowledge</span>
+    </p>
+  </header>
+
+  <div class="kg-shell">
+    <div class="kg-toolbar" aria-label="知識マップの表示操作">
+      <button type="button" data-graph-fit>全体を表示</button>
+      <button
+        type="button"
+        data-graph-view-toggle
+        aria-pressed="false"
+      >
+        一覧
+      </button>
+      <span class="kg-toolbar__hint">ドラッグで移動・ホイール／ピンチで拡大</span>
+    </div>
+
+    <div class="kg-map-layout">
+      <div class="kg-map">
+        <div
+          class="kg-viewport"
+          data-graph-viewport
+          aria-label="前提知識を上から下へ示す知識マップ"
+        >
+          <div
+            class="kg-world"
+            data-graph-world
+            data-graph-width={layout.width}
+            data-graph-height={layout.height}
+            style={`width:${layout.width}px;height:${layout.height}px`}
+          >
+            <svg
+              class="kg-edges"
+              width={layout.width}
+              height={layout.height}
+              viewBox={`0 0 ${layout.width} ${layout.height}`}
+              aria-hidden="true"
+            >
+              <defs>
+                <marker
+                  id="knowledge-arrow"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                </marker>
+              </defs>
+              {
+                layout.edges.map((edge) => (
+                  <path
+                    d={edge.path}
+                    data-knowledge-edge={edge.id}
+                    data-edge-source={edge.source}
+                    data-edge-target={edge.target}
+                    marker-end="url(#knowledge-arrow)"
+                  />
+                ))
+              }
+            </svg>
+
+            {
+              graph.nodes.map((node) => {
+                const position = positionsById.get(node.id);
+                if (!position) return null;
+                return (
+                  <button
+                    type="button"
+                    class="kg-node"
+                    data-knowledge-node={node.id}
+                    aria-pressed="false"
+                    style={`left:${position.x}px;top:${position.y}px;width:${position.width}px;height:${position.height}px`}
+                  >
+                    <span class="kg-node__status">
+                      {statusLabels[node.status]}
+                    </span>
+                    <strong>{node.title}</strong>
+                  </button>
+                );
+              })
+            }
+          </div>
+        </div>
+        <p class="kg-legend">
+          <span aria-hidden="true"></span>
+          実線は「前提知識 → 次に学ぶ知識」を示します
+        </p>
+      </div>
+
+      <aside
+        class="kg-inspector"
+        data-graph-inspector
+        aria-live="polite"
+        aria-label="選択した知識の詳細"
+      >
+        <div class="kg-empty-state">
+          <p class="kg-eyebrow">Inspector</p>
+          <h2>知識を選択</h2>
+          <p>
+            マップ上のノードを選ぶと、概要・前提知識・次につながる知識を確認できます。
+          </p>
+        </div>
+      </aside>
+    </div>
+
+    <section class="kg-list-view" aria-labelledby="knowledge-list-title">
+      <div class="kg-list-heading">
+        <p class="kg-eyebrow">Accessible list</p>
+        <h2 id="knowledge-list-title">知識一覧</h2>
+      </div>
+      <ol>
+        {
+          graph.nodes.map((node) => (
+            <li>
+              <a href={node.href}>
+                <span>{statusLabels[node.status]}</span>
+                <strong>{node.title}</strong>
+                <small>{node.summary}</small>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+  </div>
+
+  {
+    graph.nodes.map((node) => (
+      <template data-knowledge-detail={node.id}>
+        <article class="kg-detail">
+          <p class="kg-eyebrow">Selected knowledge</p>
+          <p class="kg-detail__status">{statusLabels[node.status]}</p>
+          <h2>{node.title}</h2>
+          <p class="kg-detail__summary">{node.summary}</p>
+
+          <section>
+            <h3>前提知識</h3>
+            {node.prerequisites.length > 0 ? (
+              <ul>
+                {resolveNodes(node.prerequisites).map((relation) => (
+                  <li>
+                    <button type="button" data-select-node={relation.id}>
+                      {relation.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="kg-none">前提なし</p>
+            )}
+          </section>
+
+          <section>
+            <h3>この知識を使う項目</h3>
+            {node.dependents.length > 0 ? (
+              <ul>
+                {resolveNodes(node.dependents).map((relation) => (
+                  <li>
+                    <button type="button" data-select-node={relation.id}>
+                      {relation.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="kg-none">現在はありません</p>
+            )}
+          </section>
+
+          {node.related.length > 0 && (
+            <section>
+              <h3>関連知識</h3>
+              <ul>
+                {resolveNodes(node.related).map((relation) => (
+                  <li>
+                    <button type="button" data-select-node={relation.id}>
+                      {relation.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <a class="kg-cta" href={node.href}>この知識を学ぶ</a>
+        </article>
+      </template>
+    ))
+  }
+</section>
+
+<script>
+  import { initKnowledgeGraphs } from "../client/knowledge-graph";
+
+  initKnowledgeGraphs();
+</script>

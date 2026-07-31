@@ -24,12 +24,33 @@ const {
     <meta name="description" content={summary} />
     {canonicalPath && <link rel="canonical" href={canonicalPath} />}
     <title>{title} | noetheca</title>
+    <script is:inline>
+      (() => {
+        try {
+          const saved = localStorage.getItem("noetheca-theme");
+          document.documentElement.dataset.theme =
+            saved === "light" || saved === "dark" ? saved : "light";
+        } catch {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">本文へ移動</a>
     <header class="site-header">
-      <a class="brand" href={import.meta.env.BASE_URL}>noetheca</a>
-      <span class="site-context">knowledge base</span>
+      <div class="site-identity">
+        <a class="brand" href={import.meta.env.BASE_URL}>noetheca</a>
+        <span class="site-context">knowledge base</span>
+      </div>
+      <button
+        class="theme-toggle"
+        type="button"
+        data-theme-toggle
+        aria-pressed="false"
+      >
+        テーマ: ライト
+      </button>
     </header>
     <main id="main" class="page-shell">
       <slot />
@@ -37,5 +58,35 @@ const {
     <footer class="site-footer">
       <p>Draft knowledge content. Verify facts and sources before reuse.</p>
     </footer>
+    <script>
+      const toggle = document.querySelector<HTMLButtonElement>(
+        "[data-theme-toggle]",
+      );
+
+      const applyThemeLabel = () => {
+        if (!toggle) return;
+        const dark = document.documentElement.dataset.theme === "dark";
+        toggle.textContent = dark ? "テーマ: ダーク" : "テーマ: ライト";
+        toggle.setAttribute("aria-pressed", String(dark));
+        toggle.setAttribute(
+          "aria-label",
+          dark ? "ライトテーマへ切り替える" : "ダークテーマへ切り替える",
+        );
+      };
+
+      toggle?.addEventListener("click", () => {
+        const next =
+          document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        try {
+          localStorage.setItem("noetheca-theme", next);
+        } catch {
+          // Theme selection still applies for the current page.
+        }
+        applyThemeLabel();
+      });
+
+      applyThemeLabel();
+    </script>
   </body>
 </html>
