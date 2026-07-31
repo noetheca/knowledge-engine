@@ -42,5 +42,5 @@ versioned and still considered a prototype.
 
 ## Licensing
 
-The code license has not yet been approved. No license file is included, and
-external contributions are not currently accepted.
+This repository is licensed under [MPL 2.0](LICENSE). See
+[`LICENSING.md`](LICENSING.md) for details.
