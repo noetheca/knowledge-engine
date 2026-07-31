@@ -106,7 +106,7 @@
 .kg-edges path[data-knowledge-edge] {
   fill: none;
   marker-end: url("#knowledge-arrow");
-  opacity: 0.72;
+  opacity: 1;
   stroke: var(--text);
   stroke-linecap: square;
   stroke-linejoin: round;

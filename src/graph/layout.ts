@@ -161,12 +161,11 @@ export function layoutKnowledgeGraph(
       x: targetCenter.x - direction.x * (targetRadius + 14),
       y: targetCenter.y - direction.y * (targetRadius + 14),
     };
-    const middleY = (sourcePoint.y + targetPoint.y) / 2;
     return {
       ...edge,
       path:
         `M ${sourcePoint.x} ${sourcePoint.y} ` +
-        `V ${middleY} H ${targetPoint.x} V ${targetPoint.y}`,
+        `L ${targetPoint.x} ${targetPoint.y}`,
     };
   });
 

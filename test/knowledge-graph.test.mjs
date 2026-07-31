@@ -83,7 +83,7 @@ test("lays out multiple roots above their dependent node", () => {
     (positions.get("child")?.y ?? 0) > (positions.get("first")?.y ?? 0),
   );
   assert.equal(layout.edges.length, 2);
-  assert.match(layout.edges[0]?.path ?? "", /^M .+ V .+ H .+ V /);
+  assert.match(layout.edges[0]?.path ?? "", /^M .+ L /);
 });
 
 test("refuses to lay out a prerequisite cycle", () => {
