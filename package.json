@@ -1,6 +1,7 @@
 {
   "name": "@noetheca/knowledge-engine",
   "version": "0.0.0",
+  "license": "MPL-2.0",
   "description": "Shared validation, manifest, and Astro primitives for noetheca.",
   "type": "module",
   "bin": {
