@@ -95,7 +95,11 @@ const statusLabels = ui.graph.status;
       >
         {ui.graph.list}
       </button>
-      <span class="kg-toolbar__hint">{ui.graph.interactionHint}</span>
+      {
+        ui.graph.interactionHint && (
+          <span class="kg-toolbar__hint">{ui.graph.interactionHint}</span>
+        )
+      }
       {
         controls && (
           <div class="kg-toolbar__controls">
@@ -138,8 +142,10 @@ const statusLabels = ui.graph.status;
                   viewBox="0 0 24 24"
                   aria-hidden="true"
                 >
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" />
+                  <path d="M4 7h4M12 7h8M4 12h10M18 12h2M4 17h2M10 17h10" />
+                  <circle cx="10" cy="7" r="2" />
+                  <circle cx="16" cy="12" r="2" />
+                  <circle cx="8" cy="17" r="2" />
                 </svg>
               </summary>
               <div class="kg-settings__panel">
