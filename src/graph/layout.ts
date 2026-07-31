@@ -326,7 +326,7 @@ function seedChronologyBands(
   nodeWidth: number,
   nodeHeight: number,
   collisionGap: number,
-): void {
+): Map<string, number> {
   const rankedGroups = new Map<number, SimulationNode[]>();
   const unrankedNodes: SimulationNode[] = [];
   for (const node of simulationNodes) {
@@ -340,11 +340,15 @@ function seedChronologyBands(
     rankedGroups.set(rank as number, group);
   }
   if (rankedGroups.size === 0) {
-    return;
+    return new Map();
   }
 
   const rankedEntries = [...rankedGroups.entries()].sort(
     ([left], [right]) => left - right,
+  );
+  const rankedNodeCount = rankedEntries.reduce(
+    (count, [, nodes]) => count + nodes.length,
+    0,
   );
   const contextualEdges = edges.filter(({ kind }) => kind === "contextual");
   const splitByContextDepth = (nodes: SimulationNode[]): SimulationNode[][] => {
@@ -392,8 +396,35 @@ function seedChronologyBands(
       .sort(([left], [right]) => left - right)
       .map(([, group]) => group.sort((left, right) => compareText(left.id, right.id)));
   };
-  const rankedContextGroups = rankedEntries.flatMap(([, nodes]) =>
-    splitByContextDepth(nodes),
+  const maximumChronologyBands = Math.max(
+    1,
+    Math.min(
+      rankedEntries.length,
+      Math.max(6, Math.ceil(Math.sqrt(rankedNodeCount))),
+    ),
+  );
+  const targetBandSize = Math.max(
+    1,
+    Math.ceil(rankedNodeCount / maximumChronologyBands),
+  );
+  const rankedCohorts: SimulationNode[][] = [];
+  let currentCohort: SimulationNode[] = [];
+  for (const [, nodes] of rankedEntries) {
+    if (
+      currentCohort.length > 0 &&
+      currentCohort.length + nodes.length > targetBandSize &&
+      rankedCohorts.length + 1 < maximumChronologyBands
+    ) {
+      rankedCohorts.push(currentCohort);
+      currentCohort = [];
+    }
+    currentCohort.push(...nodes);
+  }
+  if (currentCohort.length > 0) {
+    rankedCohorts.push(currentCohort);
+  }
+  const rankedContextGroups = rankedCohorts.map((nodes) =>
+    splitByContextDepth(nodes).flat(),
   );
   const orderedGroups =
     unrankedNodes.length > 0
@@ -403,21 +434,35 @@ function seedChronologyBands(
         ]
       : rankedContextGroups;
   const bandGap = nodeHeight + collisionGap;
-  const rowCounts = orderedGroups.map((nodes) =>
-    Math.max(1, Math.ceil(Math.sqrt(nodes.length))),
+  const horizontalGap = nodeWidth + collisionGap;
+  const rankedGroupCount = rankedContextGroups.length;
+  const rowCounts = orderedGroups.map((nodes, groupIndex) =>
+    groupIndex < rankedGroupCount
+      ? nodes.length > 6
+        ? 2
+        : 1
+      : Math.max(1, Math.ceil(Math.sqrt(nodes.length))),
   );
   const totalHeight = rowCounts.reduce(
     (height, rowCount) => height + rowCount * bandGap,
     0,
   );
+  const verticalAnchors = new Map<string, number>();
   let bandTop = -totalHeight / 2;
   for (const [groupIndex, nodes] of orderedGroups.entries()) {
     const rowCount = rowCounts[groupIndex] ?? 1;
     const columnCount = Math.ceil(nodes.length / rowCount);
+    const bandCenter = bandTop + (rowCount * bandGap) / 2;
     for (const [nodeIndex, node] of nodes.entries()) {
       const row = Math.floor(nodeIndex / columnCount);
+      const rowStart = row * columnCount;
+      const rowLength = Math.min(columnCount, nodes.length - rowStart);
+      const column = nodeIndex - rowStart;
+      node.x = (column - (rowLength - 1) / 2) * horizontalGap;
       node.y = bandTop + (row + 0.5) * bandGap;
+      node.velocityX = 0;
       node.velocityY = 0;
+      verticalAnchors.set(node.id, bandCenter);
     }
     bandTop += rowCount * bandGap;
   }
@@ -425,7 +470,6 @@ function seedChronologyBands(
   // Chronology seeds broad vertical cohorts instead of one immutable line.
   // Same-period concepts start across several rows; the client then treats
   // these Y positions as soft anchors and can resolve collisions in both axes.
-  const horizontalGap = nodeWidth + collisionGap;
   for (let pass = 0; pass < 160; pass += 1) {
     let moved = false;
     for (let index = 0; index < simulationNodes.length; index += 1) {
@@ -467,6 +511,7 @@ function seedChronologyBands(
       break;
     }
   }
+  return verticalAnchors;
 }
 
 function layoutContextualKnowledgeGraph(
@@ -555,16 +600,13 @@ function layoutContextualKnowledgeGraph(
     chronology,
   );
 
-  seedChronologyBands(
+  const verticalAnchors = seedChronologyBands(
     simulationNodes,
     orderedEdges,
     chronology,
     nodeWidth,
     nodeHeight,
     collisionGap,
-  );
-  const verticalAnchors = new Map(
-    simulationNodes.map(({ id, y }) => [id, y] as const),
   );
   settleContextualNodes(
     simulationNodes,

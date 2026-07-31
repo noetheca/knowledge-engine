@@ -402,7 +402,7 @@ test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
   assert.ok(postmodernY < unrankedY);
 });
 
-test("does not invert chronology across a dense contextual graph", () => {
+test("keeps dense chronology in compact old-to-new cohorts", () => {
   const concepts = Array.from({ length: 43 }, (_, index) =>
     node(`dated-${String(index).padStart(2, "0")}`, {
       related:
@@ -422,8 +422,38 @@ test("does not invert chronology across a dense contextual graph", () => {
   const ordered = [...layout.nodes].sort(
     (left, right) => chronology[left.id] - chronology[right.id],
   );
+  const early = ordered.slice(0, 10);
+  const middle = ordered.slice(16, 27);
+  const late = ordered.slice(-10);
+  const verticalRange = (nodes) => ({
+    minimum: Math.min(...nodes.map(({ y }) => y)),
+    maximum: Math.max(...nodes.map(({ y }) => y)),
+  });
 
-  for (let index = 1; index < ordered.length; index += 1) {
-    assert.ok(ordered[index - 1].y < ordered[index].y);
-  }
+  assert.ok(verticalRange(early).maximum < verticalRange(middle).minimum);
+  assert.ok(verticalRange(middle).maximum < verticalRange(late).minimum);
+  assert.ok(layout.width < 3_500);
+  assert.ok(layout.height < 3_000);
+});
+
+test("caps the initial envelope of a long dated contextual chain", () => {
+  const concepts = Array.from({ length: 49 }, (_, index) =>
+    node(`chain-${String(index).padStart(2, "0")}`),
+  );
+  const graph = createKnowledgeGraphModel(concepts, {
+    contextualRelations: concepts.slice(0, -1).map(({ id }, index) => ({
+      source: id,
+      target: concepts[index + 1].id,
+    })),
+  });
+  const chronology = Object.fromEntries(
+    concepts.map(({ id }, index) => [id, 1800 + index]),
+  );
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology,
+  });
+
+  assert.ok(layout.width < 3_500);
+  assert.ok(layout.height < 3_500);
 });

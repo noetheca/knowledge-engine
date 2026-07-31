@@ -1,10 +1,15 @@
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 2.4;
+import {
+  canAnimateContextualSimulation,
+  clampFitScale,
+  clampInteractiveScale,
+  measureGraphContentBounds,
+  MIN_INTERACTIVE_SCALE,
+} from "./knowledge-graph-runtime.js";
+import { getUiStrings } from "../i18n/ui.js";
+
 const CAMERA_TRANSITION_DURATION_MS = 300;
 const GRID_BASE_SPACING = 24;
 const GRID_TARGET_SCREEN_SPACING = 24;
-
-import { getUiStrings } from "../i18n/ui.js";
 
 interface Transform {
   x: number;
@@ -143,6 +148,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   }
 
   const transform: Transform = { x: 0, y: 0, scale: 1 };
+  let interactionMinimumScale = MIN_INTERACTIVE_SCALE;
   const pointers = new Map<number, PointerPosition>();
   const nodeElements = [
     ...root.querySelectorAll<HTMLButtonElement>("[data-knowledge-node]"),
@@ -575,10 +581,12 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const contextualSimulationCanRun = (): boolean =>
     contextualRelationships &&
-    !document.hidden &&
-    !reducedMotionQuery.matches &&
-    root.dataset.view !== "list" &&
-    root.isConnected;
+    canAnimateContextualSimulation({
+      connected: root.isConnected,
+      hidden: document.hidden,
+      reducedMotion: reducedMotionQuery.matches,
+      view: root.dataset.view === "list" ? "list" : "map",
+    });
 
   const stepContextualSimulation = (render = true): number => {
     const pinnedNodeId = nodeDrag?.nodeId;
@@ -1181,7 +1189,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     const pointY = clientY - bounds.top;
     const worldX = (pointX - transform.x) / transform.scale;
     const worldY = (pointY - transform.y) / transform.scale;
-    transform.scale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
+    transform.scale = clampInteractiveScale(nextScale, interactionMinimumScale);
     transform.x = pointX - worldX * transform.scale;
     transform.y = pointY - worldY * transform.scale;
     renderTransform();
@@ -1194,26 +1202,14 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return;
     }
     const safe = getSafeArea();
-    const contentLeft = Math.min(
-      0,
-      ...[...nodePositions.values()].map((position) => position.x - 48),
-    );
-    const contentTop = Math.min(
-      0,
-      ...[...nodePositions.values()].map((position) => position.y - 48),
-    );
-    const contentRight = Math.max(
-      graphWidth,
-      ...[...nodePositions.values()].map(
-        (position) => position.x + position.width + 48,
-      ),
-    );
-    const contentBottom = Math.max(
-      graphHeight,
-      ...[...nodePositions.values()].map(
-        (position) => position.y + position.height + 48,
-      ),
-    );
+    const contentBounds = measureGraphContentBounds([...nodePositions.values()]);
+    if (!contentBounds) {
+      return;
+    }
+    const contentLeft = contentBounds.left;
+    const contentTop = contentBounds.top;
+    const contentRight = contentBounds.right;
+    const contentBottom = contentBounds.bottom;
     const contentWidth = contentRight - contentLeft;
     const contentHeight = contentBottom - contentTop;
     const availableWidth = Math.max(
@@ -1224,14 +1220,16 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       1,
       bounds.height - safe.top - safe.bottom,
     );
-    transform.scale = clamp(
+    transform.scale = clampFitScale(
       Math.min(
         availableWidth / contentWidth,
         availableHeight / contentHeight,
         1.25,
       ),
-      MIN_SCALE,
-      MAX_SCALE,
+    );
+    interactionMinimumScale = Math.min(
+      MIN_INTERACTIVE_SCALE,
+      transform.scale,
     );
     transform.x =
       safe.left +
@@ -1530,6 +1528,19 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   document.addEventListener("visibilitychange", syncContextualSimulation);
   reducedMotionQuery.addEventListener("change", syncContextualSimulation);
+  window.addEventListener("pageshow", () => {
+    // A browser may restore a BFCache entry with an animation-frame id that no
+    // longer has a live callback. Clear it before reheating the graph.
+    if (simulationFrame) {
+      cancelAnimationFrame(simulationFrame);
+      simulationFrame = 0;
+    }
+    if (contextualRelationships) {
+      syncContextualSimulation();
+    } else {
+      startSimulation();
+    }
+  });
 
   viewport.addEventListener(
     "wheel",
@@ -1647,10 +1658,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         x: (first.x + second.x) / 2 - bounds.left,
         y: (first.y + second.y) / 2 - bounds.top,
       };
-      transform.scale = clamp(
+      transform.scale = clampInteractiveScale(
         pinchScale * (distance / pinchDistance),
-        MIN_SCALE,
-        MAX_SCALE,
+        interactionMinimumScale,
       );
       transform.x = midpoint.x - pinchWorldPoint.x * transform.scale;
       transform.y = midpoint.y - pinchWorldPoint.y * transform.scale;
@@ -1671,6 +1681,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         simulationAnchorId = undefined;
         selectNode(finishedDrag.nodeId);
       } else if (!cancelled) {
+        startSimulation(finishedDrag.nodeId);
+      } else if (finishedDrag.moved) {
+        simulationAnchorId = undefined;
         startSimulation(finishedDrag.nodeId);
       } else {
         simulationAnchorId = undefined;
@@ -1721,6 +1734,15 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   observer.observe(viewport);
 
   root.dataset.enhanced = "true";
+  if (contextualRelationships) {
+    // Stable first paint is independent from motion preferences, visibility,
+    // and whether responsive mode initially chooses the list.
+    warmContextualLayout();
+  } else {
+    // Layered graphs use their finite, energy-bounded simulation path both on
+    // initial load and whenever a directly dragged node reheats the graph.
+    startSimulation();
+  }
   updateEdges();
   syncContextualSimulation();
   const fitAfterLayout = (): void => {
