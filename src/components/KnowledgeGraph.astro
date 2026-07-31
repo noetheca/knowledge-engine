@@ -71,7 +71,7 @@ const statusLabels = {
                 <marker
                   id="knowledge-arrow"
                   viewBox="0 0 10 10"
-                  refX="9"
+                  refX="10"
                   refY="5"
                   markerWidth="6"
                   markerHeight="6"
@@ -174,9 +174,22 @@ const statusLabels = {
     >
       <header class="kg-reader-header">
         <p class="kg-eyebrow">Knowledge article</p>
-        <button type="button" data-close-reader>閉じる</button>
       </header>
       <div class="kg-reader-content" data-reader-content></div>
+      <footer class="kg-reader-footer">
+        <nav
+          class="kg-reader-navigation"
+          data-reader-navigation
+          aria-label="前後の知識"
+        ></nav>
+        <button
+          class="kg-reader-close"
+          type="button"
+          data-close-reader
+        >
+          閉じる
+        </button>
+      </footer>
     </section>
   </div>
 
@@ -201,7 +214,7 @@ const statusLabels = {
           <h2>{node.title}</h2>
           <p class="kg-detail__summary">{node.summary}</p>
 
-          <section>
+          <section data-knowledge-previous>
             <h3>前提知識</h3>
             {node.prerequisites.length > 0 ? (
               <ul>
@@ -218,7 +231,7 @@ const statusLabels = {
             )}
           </section>
 
-          <section>
+          <section data-knowledge-next>
             <h3>この知識を使う項目</h3>
             {node.dependents.length > 0 ? (
               <ul>

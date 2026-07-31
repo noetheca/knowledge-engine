@@ -46,6 +46,12 @@ interface SafeArea {
   left: number;
 }
 
+interface ReaderRelation {
+  id: string;
+  title: string;
+  href: string;
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -66,6 +72,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const readerPanel = root.querySelector<HTMLElement>("[data-reader-panel]");
   const readerContent =
     root.querySelector<HTMLElement>("[data-reader-content]");
+  const readerNavigation =
+    root.querySelector<HTMLElement>("[data-reader-navigation]");
 
   if (
     !viewport ||
@@ -76,7 +84,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     !shell ||
     !reader ||
     !readerPanel ||
-    !readerContent
+    !readerContent ||
+    !readerNavigation
   ) {
     return;
   }
@@ -144,6 +153,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let simulationAnchorId: string | undefined;
   let readerRequest: AbortController | undefined;
   let readerTrigger: HTMLElement | undefined;
+  const readerModalQuery = window.matchMedia("(max-width: 52rem)");
 
   const getSafeArea = (): SafeArea => {
     const bounds = viewport.getBoundingClientRect();
@@ -428,13 +438,113 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     return paragraph;
   };
 
+  const resolveReaderRelation = (
+    nodeId: string,
+  ): ReaderRelation | undefined => {
+    const template = root.querySelector<HTMLTemplateElement>(
+      `template[data-knowledge-detail="${CSS.escape(nodeId)}"]`,
+    );
+    const title = template?.content.querySelector("h2")?.textContent?.trim();
+    const href =
+      template?.content.querySelector<HTMLAnchorElement>(".kg-cta")?.href;
+    if (!title || !href) {
+      return undefined;
+    }
+    return { id: nodeId, title, href };
+  };
+
+  const relationIds = (
+    nodeId: string,
+    selector: string,
+  ): string[] => {
+    const template = root.querySelector<HTMLTemplateElement>(
+      `template[data-knowledge-detail="${CSS.escape(nodeId)}"]`,
+    );
+    if (!template) {
+      return [];
+    }
+    return [
+      ...template.content.querySelectorAll<HTMLElement>(
+        `${selector} [data-select-node]`,
+      ),
+    ].flatMap((relation) => {
+      const relationId = relation.dataset.selectNode;
+      return relationId ? [relationId] : [];
+    });
+  };
+
+  const createReaderNavSection = (
+    label: string,
+    relations: ReaderRelation[],
+  ): HTMLElement => {
+    const section = document.createElement("section");
+    section.className = "kg-reader-nav-section";
+    const heading = document.createElement("h2");
+    heading.textContent = label;
+    section.append(heading);
+
+    if (relations.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "kg-reader-nav-empty";
+      empty.textContent = "該当する知識はありません";
+      section.append(empty);
+      return section;
+    }
+
+    const links = document.createElement("div");
+    links.className = "kg-reader-nav-links";
+    links.dataset.branching = String(relations.length > 1);
+    links.style.setProperty(
+      "--kg-branch-count",
+      String(relations.length),
+    );
+    for (const relation of relations) {
+      const link = document.createElement("a");
+      link.className = "kg-reader-nav-link";
+      link.href = relation.href;
+      link.dataset.readerNode = relation.id;
+      link.textContent = relation.title;
+      links.append(link);
+    }
+    section.append(links);
+    return section;
+  };
+
+  const renderReaderNavigation = (nodeId: string): void => {
+    const previous = relationIds(
+      nodeId,
+      "[data-knowledge-previous]",
+    ).flatMap((relationId) => {
+      const relation = resolveReaderRelation(relationId);
+      return relation ? [relation] : [];
+    });
+    const next = relationIds(
+      nodeId,
+      "[data-knowledge-next]",
+    ).flatMap((relationId) => {
+      const relation = resolveReaderRelation(relationId);
+      return relation ? [relation] : [];
+    });
+    readerNavigation.replaceChildren(
+      createReaderNavSection("前へ", previous),
+      createReaderNavSection("次へ", next),
+    );
+  };
+
+  const syncReaderModality = (): void => {
+    const readerIsOpen = root.dataset.readerOpen !== undefined;
+    const readerIsModal = readerModalQuery.matches;
+    shell.inert = readerIsOpen && readerIsModal;
+    readerPanel.setAttribute("aria-modal", String(readerIsModal));
+  };
+
   const closeReader = (): void => {
     readerRequest?.abort();
     readerRequest = undefined;
     reader.setAttribute("aria-hidden", "true");
     readerPanel.setAttribute("aria-busy", "false");
-    shell.inert = false;
     delete root.dataset.readerOpen;
+    syncReaderModality();
     readerTrigger?.focus({ preventScroll: true });
     readerTrigger = undefined;
   };
@@ -446,16 +556,26 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     readerRequest?.abort();
     const request = new AbortController();
     readerRequest = request;
-    readerTrigger = trigger;
+    if (root.dataset.readerOpen === undefined) {
+      readerTrigger = trigger;
+    }
     root.dataset.readerOpen = "";
     reader.setAttribute("aria-hidden", "false");
     readerPanel.setAttribute("aria-busy", "true");
-    shell.inert = true;
+    syncReaderModality();
+    const selectedNode = selectedNodeElement();
+    if (selectedNode && !readerModalQuery.matches) {
+      requestAnimationFrame(() => centerNodeBesideReader(selectedNode));
+    }
     showReaderMessage("記事を読み込んでいます…", "kg-reader-loading");
+    const selectedNodeId = root.dataset.selectedNode;
+    if (selectedNodeId) {
+      renderReaderNavigation(selectedNodeId);
+    } else {
+      readerNavigation.replaceChildren();
+    }
     readerPanel.scrollTop = 0;
-    readerPanel
-      .querySelector<HTMLButtonElement>("[data-close-reader]")
-      ?.focus({ preventScroll: true });
+    readerPanel.focus({ preventScroll: true });
 
     try {
       const response = await fetch(href, {
@@ -584,7 +704,41 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     renderTransform();
   };
 
+  const centerNodeBesideReader = (
+    node: HTMLButtonElement,
+  ): void => {
+    if (readerModalQuery.matches) {
+      return;
+    }
+    const viewportBounds = viewport.getBoundingClientRect();
+    const nodeBounds = node.getBoundingClientRect();
+    const safe = getSafeArea();
+    const panelWidth = readerPanel.offsetWidth;
+    const availableRight = Math.max(
+      safe.left + 1,
+      viewportBounds.width - panelWidth,
+    );
+    const targetX =
+      viewportBounds.left +
+      safe.left +
+      (availableRight - safe.left) / 2;
+    const targetY =
+      viewportBounds.top +
+      safe.top +
+      (viewportBounds.height - safe.top - safe.bottom) / 2;
+    transform.x += targetX - (nodeBounds.left + nodeBounds.right) / 2;
+    transform.y += targetY - (nodeBounds.top + nodeBounds.bottom) / 2;
+    renderTransform();
+  };
+
   const centerSelection = (node: HTMLButtonElement): void => {
+    if (
+      root.dataset.readerOpen !== undefined &&
+      !readerModalQuery.matches
+    ) {
+      centerNodeBesideReader(node);
+      return;
+    }
     positionInspector(node);
     const viewportBounds = viewport.getBoundingClientRect();
     const nodeBounds = node.getBoundingClientRect();
@@ -660,7 +814,11 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     root.dataset.selectedNode = nodeId;
     requestAnimationFrame(() => {
       centerSelection(selectedNode);
-      inspector.focus({ preventScroll: true });
+      if (root.dataset.readerOpen !== undefined) {
+        readerPanel.focus({ preventScroll: true });
+      } else {
+        inspector.focus({ preventScroll: true });
+      }
     });
   };
 
@@ -679,6 +837,21 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       if (destination.origin === window.location.origin) {
         event.preventDefault();
         void openReader(destination.href, articleLink);
+      }
+      return;
+    }
+    const readerLink =
+      target.closest<HTMLAnchorElement>("[data-reader-node]");
+    if (readerLink) {
+      const nodeId = readerLink.dataset.readerNode;
+      if (!nodeId) {
+        return;
+      }
+      const destination = new URL(readerLink.href, window.location.href);
+      if (destination.origin === window.location.origin) {
+        event.preventDefault();
+        selectNode(nodeId);
+        void openReader(destination.href, readerLink);
       }
       return;
     }
@@ -883,6 +1056,19 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   viewport.addEventListener("pointercancel", (event) => {
     releasePointer(event, true);
   });
+
+  readerModalQuery.addEventListener("change", () => {
+    syncReaderModality();
+    const node = selectedNodeElement();
+    if (
+      node &&
+      root.dataset.readerOpen !== undefined &&
+      !readerModalQuery.matches
+    ) {
+      requestAnimationFrame(() => centerNodeBesideReader(node));
+    }
+  });
+  syncReaderModality();
 
   const observer = new ResizeObserver(() => {
     if (root.dataset.view !== "list") {

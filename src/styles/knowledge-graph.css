@@ -108,7 +108,7 @@
   marker-end: url("#knowledge-arrow");
   opacity: 1;
   stroke: var(--text);
-  stroke-linecap: square;
+  stroke-linecap: butt;
   stroke-linejoin: round;
   stroke-width: 3;
   transition: opacity 120ms ease, stroke-width 120ms ease;
@@ -248,6 +248,12 @@
   pointer-events: auto;
   transform: scale(1);
   visibility: visible;
+}
+
+.knowledge-graph[data-reader-open] .kg-inspector {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .kg-inspector::before,
@@ -448,7 +454,6 @@
 
 .knowledge-graph[data-reader-open] .kg-reader-overlay {
   opacity: 1;
-  pointer-events: auto;
   visibility: visible;
 }
 
@@ -458,6 +463,7 @@
     color-mix(in srgb, var(--background) 48%, transparent);
   border: 0;
   cursor: default;
+  display: none;
   inset: 0;
   padding: 0;
   position: absolute;
@@ -468,13 +474,18 @@
   --kg-reader-padding: clamp(1.25rem, 4vw, 3rem);
   background:
     color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(10px);
   border: 0;
   border-left: 2px solid var(--text);
   height: 100%;
   margin-left: auto;
   max-width: 48rem;
   overflow: auto;
-  padding: 0 var(--kg-reader-padding) 3rem;
+  padding:
+    5.5rem
+    var(--kg-reader-padding)
+    3rem;
+  pointer-events: auto;
   position: relative;
   transform: translateX(100%);
   transition: transform 200ms ease;
@@ -499,21 +510,8 @@
     1rem
     var(--kg-reader-padding);
   position: sticky;
-  top: 0;
+  top: 5.5rem;
   z-index: 2;
-}
-
-.kg-reader-header button {
-  background: var(--surface);
-  border: 2px solid var(--text);
-  border-radius: 999px;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 750;
-  min-height: 2.5rem;
-  padding: 0.4rem 0.8rem;
 }
 
 .kg-reader-content {
@@ -562,6 +560,97 @@
 .kg-reader-error a {
   display: inline-block;
   margin-top: 0.75rem;
+}
+
+.kg-reader-footer {
+  border-top: 2px solid var(--text);
+  margin-top: clamp(3rem, 7vh, 5rem);
+  padding-top: 2rem;
+}
+
+.kg-reader-navigation {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.kg-reader-nav-section h2 {
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.kg-reader-nav-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0.75rem 0 0;
+}
+
+.kg-reader-nav-links {
+  --kg-branch-count: 1;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns:
+    repeat(var(--kg-branch-count), minmax(0, 1fr));
+  padding-top: 2rem;
+  position: relative;
+}
+
+.kg-reader-nav-links::before {
+  border-left: 2px solid var(--text);
+  content: "";
+  height: 1rem;
+  left: 50%;
+  position: absolute;
+  top: 0;
+}
+
+.kg-reader-nav-links[data-branching="true"]::after {
+  border-top: 2px solid var(--text);
+  content: "";
+  left: calc(50% / var(--kg-branch-count));
+  position: absolute;
+  right: calc(50% / var(--kg-branch-count));
+  top: 1rem;
+}
+
+.kg-reader-nav-link {
+  align-content: center;
+  background: var(--surface);
+  border: 2px solid var(--text);
+  border-radius: 1rem;
+  color: var(--text);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 750;
+  min-height: 4rem;
+  padding: 0.75rem;
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+}
+
+.kg-reader-nav-link::before {
+  border-left: 2px solid var(--text);
+  content: "";
+  height: 1rem;
+  left: 50%;
+  position: absolute;
+  top: calc(-1rem - 2px);
+}
+
+.kg-reader-close {
+  background: var(--text);
+  border: 2px solid var(--text);
+  border-radius: 1rem;
+  color: var(--background);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  margin-top: 2.5rem;
+  min-height: 3.25rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
 }
 
 .kg-list-view {
@@ -650,6 +739,41 @@
     max-width: none;
     transform: translateY(-100%);
     width: 100%;
+  }
+
+  .kg-reader-nav-links {
+    grid-template-columns: 1fr;
+  }
+
+  .kg-reader-nav-links[data-branching="true"]::after {
+    display: none;
+  }
+
+  .kg-reader-nav-links[data-branching="true"] {
+    padding-left: 2.5rem;
+  }
+
+  .kg-reader-nav-links[data-branching="true"]::before {
+    bottom: 2rem;
+    height: auto;
+    left: 1.25rem;
+  }
+
+  .kg-reader-nav-links[data-branching="true"] .kg-reader-nav-link::before {
+    border-left: 0;
+    border-top: 2px solid var(--text);
+    height: 0;
+    left: -1.25rem;
+    top: 50%;
+    width: 1.25rem;
+  }
+
+  .knowledge-graph[data-reader-open] .kg-reader-overlay {
+    pointer-events: auto;
+  }
+
+  .kg-reader-backdrop {
+    display: block;
   }
 
   .knowledge-graph[data-reader-open] .kg-reader-panel {

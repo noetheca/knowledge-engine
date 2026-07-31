@@ -62,6 +62,16 @@ button:focus-visible {
   outline-offset: 0.3rem;
 }
 
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .skip-link {
   background: var(--text);
   color: var(--background);
@@ -112,22 +122,49 @@ button:focus-visible {
 }
 
 .theme-toggle {
+  align-items: center;
   background: var(--surface);
   border: 2px solid var(--text);
   border-radius: 999px;
   box-shadow: 0 4px 0 var(--shadow);
   color: var(--text);
   cursor: pointer;
-  font: inherit;
-  font-size: 0.75rem;
+  display: grid;
+  justify-content: center;
   font-weight: 750;
-  min-height: 2.5rem;
-  padding: 0.45rem 0.85rem;
+  height: 2.75rem;
+  padding: 0;
+  width: 2.75rem;
 }
 
 .theme-toggle:active {
   box-shadow: none;
   transform: translateY(3px);
+}
+
+.theme-toggle__icon {
+  fill: currentColor;
+  grid-area: 1 / 1;
+  height: 1.35rem;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
+  width: 1.35rem;
+}
+
+.theme-toggle__icon--dark {
+  opacity: 0;
+  transform: rotate(-20deg) scale(0.75);
+}
+
+:root[data-theme="dark"] .theme-toggle__icon--light {
+  opacity: 0;
+  transform: rotate(20deg) scale(0.75);
+}
+
+:root[data-theme="dark"] .theme-toggle__icon--dark {
+  opacity: 1;
+  transform: none;
 }
 
 .page-shell {
@@ -221,9 +258,26 @@ h2 {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  html,
+  body,
+  .site-header,
+  .site-footer,
+  .theme-toggle {
+    transition:
+      background-color 300ms ease,
+      border-color 300ms ease,
+      color 300ms ease;
+  }
+
   a {
     transition: color 120ms ease;
   }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: ease;
 }
 
 @media (max-width: 36rem) {
