@@ -10,10 +10,22 @@ This bootstrap release intentionally keeps the package small:
 - validate stable IDs, references, prerequisite cycles, locale metadata, local
   links, and unsafe Markdown;
 - emit a portable JSON manifest;
-- provide minimal Astro layout and relation components.
+- provide shared Astro layout, article relation, and interactive graph
+  components with domain-specific relationship vocabulary.
 
 Astro is a peer dependency. Domain repositories own their content and thin
 site configuration; this repository owns shared behavior.
+
+`KnowledgeGraph.astro` supports both prerequisite maps and contextual maps.
+Contextual consumers can pass directed `contextualRelations` to
+`createKnowledgeGraphModel()`, `chronology` anchors for strict old-to-new
+vertical ordering, `contextFacts` for domain-specific inspector metadata, and
+`thumbnails` for an optional media view. Directed contextual relations affect
+layout and render with arrowheads. Undirected `related` links are excluded from
+physics and appear only when a connected node is selected. Setting `controls`
+enables the shared text/thumbnail toggle plus node-size and repulsion controls.
+The browser layer keeps contextual graphs simulated while visible and
+preserves the server-side settled layout as their stable starting point.
 
 Filesystem paths are build-time source locations, not knowledge identities.
 Consumers can use `createTranslationFileIndex()` to match framework content

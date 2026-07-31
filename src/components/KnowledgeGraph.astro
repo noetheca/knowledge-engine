@@ -1,0 +1,512 @@
+---
+import type { KnowledgeGraphModel } from "../graph/model";
+import { layoutKnowledgeGraph } from "../graph/layout";
+import { getUiStrings, type UiStrings } from "../i18n/ui";
+import "../styles/knowledge-graph.css";
+
+type KnowledgeGraphLabels = Partial<
+  Omit<UiStrings["graph"], "status">
+> & {
+  status?: Partial<UiStrings["graph"]["status"]>;
+};
+
+interface KnowledgeGraphContextFact {
+  label: string;
+  value: string;
+}
+
+interface Props {
+  graph: KnowledgeGraphModel;
+  title?: string;
+  locale?: string;
+  labels?: KnowledgeGraphLabels;
+  relationshipMode?: "prerequisite" | "contextual";
+  initialView?: "map" | "list" | "responsive";
+  chronology?: Readonly<Record<string, number>>;
+  thumbnails?: Readonly<Record<string, string>>;
+  contextFacts?: Readonly<
+    Record<string, readonly KnowledgeGraphContextFact[]>
+  >;
+  controls?: boolean;
+}
+
+const {
+  graph,
+  title = "Knowledge Map",
+  locale = "ja",
+  labels,
+  relationshipMode = "prerequisite",
+  initialView = "map",
+  chronology,
+  thumbnails = {},
+  contextFacts = {},
+  controls = false,
+} = Astro.props;
+const defaultUi = getUiStrings(locale);
+const ui = {
+  ...defaultUi,
+  graph: {
+    ...defaultUi.graph,
+    ...labels,
+    status: {
+      ...defaultUi.graph.status,
+      ...labels?.status,
+    },
+  },
+};
+const layout = layoutKnowledgeGraph(graph, {
+  strategy: relationshipMode === "contextual" ? "contextual" : "layered",
+  chronology,
+});
+const hasChronology = Object.values(chronology ?? {}).some(Number.isFinite);
+const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+const positionsById = new Map(layout.nodes.map((node) => [node.id, node]));
+const hasDirectionalEdges = graph.edges.some(({ kind }) => kind !== "related");
+const hasRelatedEdges = graph.edges.some(({ kind }) => kind === "related");
+const hasThumbnails = graph.nodes.some(
+  ({ id }) => Boolean(thumbnails[id]?.trim()),
+);
+const resolveNodes = (ids: string[]) =>
+  ids.flatMap((id) => {
+    const node = nodesById.get(id);
+    return node ? [node] : [];
+  });
+const statusLabels = ui.graph.status;
+---
+
+<section
+  class="knowledge-graph"
+  data-knowledge-graph
+  data-locale={locale}
+  data-initial-view={initialView}
+  data-relationship-mode={relationshipMode}
+  data-chronology-axis={hasChronology ? "y" : undefined}
+  data-ui={JSON.stringify(ui.graph)}
+  data-view={initialView === "list" ? "list" : "map"}
+  aria-label={title}
+>
+  <div class="kg-shell">
+    <div class="kg-toolbar" aria-label={ui.graph.toolbarLabel}>
+      <button type="button" data-graph-fit>{ui.graph.fit}</button>
+      <button
+        type="button"
+        data-graph-view-toggle
+        aria-pressed="false"
+      >
+        {ui.graph.list}
+      </button>
+      {
+        ui.graph.interactionHint && (
+          <span class="kg-toolbar__hint">{ui.graph.interactionHint}</span>
+        )
+      }
+      {
+        controls && (
+          <div class="kg-toolbar__controls">
+            {hasThumbnails && (
+              <button
+                class="kg-control-icon kg-thumbnail-toggle"
+                type="button"
+                data-graph-thumbnail-toggle
+                aria-label={ui.graph.showThumbnails}
+                aria-pressed="false"
+                title={ui.graph.showThumbnails}
+              >
+                <svg
+                  class="kg-control-icon__graphic kg-control-icon__graphic--thumbnail"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="8.5" cy="9" r="1.5" />
+                  <path d="m5 17 4.5-4 3.25 3 2.75-2.5L19 17" />
+                </svg>
+                <svg
+                  class="kg-control-icon__graphic kg-control-icon__graphic--text"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M5 6h14M12 6v12M8.5 18h7" />
+                </svg>
+              </button>
+            )}
+            <details class="kg-settings" data-graph-settings>
+              <summary
+                class="kg-control-icon"
+                aria-label={ui.graph.settings}
+                aria-expanded="false"
+                title={ui.graph.settings}
+              >
+                <svg
+                  class="kg-control-icon__graphic"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M4 7h4M12 7h8M4 12h10M18 12h2M4 17h2M10 17h10" />
+                  <circle cx="10" cy="7" r="2" />
+                  <circle cx="16" cy="12" r="2" />
+                  <circle cx="8" cy="17" r="2" />
+                </svg>
+              </summary>
+              <div class="kg-settings__panel">
+                <label>
+                  <span>{ui.graph.nodeSize}</span>
+                  <output data-node-size-output>100%</output>
+                  <input
+                    type="range"
+                    min="70"
+                    max="150"
+                    step="5"
+                    value="100"
+                    data-node-size-control
+                  />
+                </label>
+                <label>
+                  <span>{ui.graph.repulsionStrength}</span>
+                  <output data-repulsion-output>1.00×</output>
+                  <input
+                    type="range"
+                    min="25"
+                    max="200"
+                    step="5"
+                    value="100"
+                    data-repulsion-control
+                  />
+                </label>
+              </div>
+            </details>
+          </div>
+        )
+      }
+    </div>
+
+    <div class="kg-map-layout">
+      <div class="kg-map">
+        <div
+          class="kg-viewport"
+          data-graph-viewport
+          aria-label={ui.graph.viewportLabel}
+        >
+          <div
+            class="kg-world"
+            data-graph-world
+            data-graph-width={layout.width}
+            data-graph-height={layout.height}
+            style={`width:${layout.width}px;height:${layout.height}px`}
+          >
+            <svg
+              class="kg-edges"
+              width={layout.width}
+              height={layout.height}
+              viewBox={`0 0 ${layout.width} ${layout.height}`}
+              aria-hidden="true"
+            >
+              {
+                layout.edges.map((edge) => (
+                  <g>
+                    <path
+                      d={edge.path}
+                      data-knowledge-edge={edge.id}
+                      data-edge-source={edge.source}
+                      data-edge-target={edge.target}
+                      data-edge-kind={edge.kind}
+                      data-target-status={nodesById.get(edge.target)?.status}
+                    />
+                    {
+                      edge.kind !== "related" && (
+                        <polygon
+                          class="kg-edge-arrow"
+                          data-knowledge-arrow={edge.id}
+                          data-edge-source={edge.source}
+                          data-edge-target={edge.target}
+                          data-target-status={nodesById.get(edge.target)?.status}
+                          points=""
+                        />
+                      )
+                    }
+                  </g>
+                ))
+              }
+            </svg>
+
+            {
+              graph.nodes.map((node) => {
+                const position = positionsById.get(node.id);
+                if (!position) return null;
+                const thumbnail = thumbnails[node.id]?.trim();
+                return (
+                  <button
+                    type="button"
+                    class="kg-node"
+                    data-knowledge-node={node.id}
+                    data-knowledge-href={node.href}
+                    data-status={node.status}
+                    data-has-thumbnail={thumbnail ? "true" : undefined}
+                    aria-label={node.title}
+                    aria-pressed="false"
+                    style={`left:${position.x}px;top:${position.y}px;width:${position.width}px;height:${position.height}px`}
+                  >
+                    {thumbnail && (
+                      <img
+                        class="kg-node__thumbnail"
+                        data-thumbnail-src={thumbnail}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        referrerpolicy="no-referrer"
+                        draggable="false"
+                      />
+                    )}
+                    <strong>{node.title}</strong>
+                  </button>
+                );
+              })
+            }
+          </div>
+        </div>
+        {
+          (hasDirectionalEdges || hasRelatedEdges) && (
+            <p class="kg-legend">
+              {hasDirectionalEdges && (
+                <span class="kg-legend__item">
+                  <span
+                    class="kg-legend__sample"
+                    data-edge-kind="prerequisite"
+                    aria-hidden="true"
+                  />
+                  {ui.graph.legend}
+                </span>
+              )}
+              {hasRelatedEdges && (
+                <span class="kg-legend__item">
+                  <span
+                    class="kg-legend__sample"
+                    data-edge-kind="related"
+                    aria-hidden="true"
+                  />
+                  {ui.graph.relatedLegend}
+                </span>
+              )}
+            </p>
+          )
+        }
+      </div>
+
+      <aside
+        class="kg-inspector"
+        data-graph-inspector
+        aria-live="polite"
+        aria-label={ui.graph.inspectorLabel}
+        aria-hidden="true"
+        tabindex="-1"
+      ></aside>
+    </div>
+
+    <section class="kg-list-view" aria-labelledby="knowledge-list-title">
+      <div class="kg-list-heading">
+        <p class="kg-eyebrow">{ui.graph.accessibleList}</p>
+        <h2 id="knowledge-list-title">{ui.graph.knowledgeList}</h2>
+      </div>
+      <ol>
+        {
+          graph.nodes.map((node) => (
+            <li>
+              <a href={node.href}>
+                <span>{statusLabels[node.status]}</span>
+                <strong>{node.title}</strong>
+                <small>{node.summary}</small>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+  </div>
+
+  <div
+    class="kg-reader-overlay"
+    data-knowledge-reader
+    aria-hidden="true"
+  >
+    <button
+      class="kg-reader-backdrop"
+      type="button"
+      data-close-reader
+      aria-label={ui.graph.closeArticleLabel}
+    ></button>
+    <section
+      class="kg-reader-panel"
+      data-reader-panel
+      role="dialog"
+      aria-modal="true"
+      aria-label={ui.graph.articleLabel}
+      aria-busy="false"
+      tabindex="-1"
+    >
+      <header class="kg-reader-header">
+        <p class="kg-eyebrow">{ui.graph.articleEyebrow}</p>
+      </header>
+      <div class="kg-reader-content" data-reader-content></div>
+      <footer class="kg-reader-footer">
+        <nav
+          class="kg-reader-navigation"
+          data-reader-navigation
+          aria-label={ui.graph.navigationLabel}
+        ></nav>
+        <div class="kg-reader-actions">
+          <button
+            class="kg-reader-close"
+            type="button"
+            data-close-reader
+          >
+            {ui.graph.close}
+          </button>
+          <a class="kg-reader-full-page" data-reader-full-page href="/">
+            {ui.graph.fullPage}
+          </a>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  {
+    graph.nodes.map((node) => (
+      <template data-knowledge-detail={node.id}>
+        <article class="kg-detail">
+          <header class="kg-detail__header">
+            <div>
+              <p class="kg-eyebrow">{ui.graph.selectedKnowledge}</p>
+              <p class="kg-detail__status">{statusLabels[node.status]}</p>
+            </div>
+            <button
+              class="kg-inspector-close"
+              type="button"
+              data-close-inspector
+              aria-label={ui.graph.closeDetailsLabel}
+            >
+              {ui.graph.close}
+            </button>
+          </header>
+          <h2>{node.title}</h2>
+          <p class="kg-detail__summary">{node.summary}</p>
+
+          {(contextFacts[node.id]?.length ?? 0) > 0 && (
+            <dl class="kg-detail__facts">
+              {contextFacts[node.id]?.map((fact) => (
+                <div>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {relationshipMode === "prerequisite" && (
+            <>
+              <section data-knowledge-previous>
+                <h3>{ui.graph.prerequisites}</h3>
+                {node.prerequisites.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.prerequisites).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noPrerequisites}</p>
+                )}
+              </section>
+
+              <section data-knowledge-next>
+                <h3>{ui.graph.dependents}</h3>
+                {node.dependents.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.dependents).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noDependents}</p>
+                )}
+              </section>
+            </>
+          )}
+
+          {relationshipMode === "contextual" && (
+            <>
+              <section data-knowledge-previous>
+                <h3>{ui.graph.prerequisites}</h3>
+                {node.predecessors.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.predecessors).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noPrerequisites}</p>
+                )}
+              </section>
+
+              <section data-knowledge-next>
+                <h3>{ui.graph.dependents}</h3>
+                {node.successors.length > 0 ? (
+                  <ul>
+                    {resolveNodes(node.successors).map((relation) => (
+                      <li>
+                        <button type="button" data-select-node={relation.id}>
+                          {relation.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p class="kg-none">{ui.graph.noDependents}</p>
+                )}
+              </section>
+            </>
+          )}
+
+          {(relationshipMode === "contextual" || node.related.length > 0) && (
+            <section data-knowledge-related>
+              <h3>{ui.graph.related}</h3>
+              {node.related.length > 0 ? (
+                <ul>
+                  {resolveNodes(node.related).map((relation) => (
+                    <li>
+                      <button type="button" data-select-node={relation.id}>
+                        {relation.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p class="kg-none">{ui.graph.noKnowledge}</p>
+              )}
+            </section>
+          )}
+
+          <div class="kg-cta-shadow">
+            <a class="kg-cta" href={node.href}>{ui.graph.learn}</a>
+          </div>
+        </article>
+      </template>
+    ))
+  }
+</section>
+
+<script>
+  import { initKnowledgeGraphs } from "../client/knowledge-graph";
+
+  initKnowledgeGraphs();
+</script>

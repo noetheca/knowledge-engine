@@ -7,31 +7,46 @@ interface Relation {
 
 interface Props {
   prerequisites?: Relation[];
+  successors?: Relation[];
   related?: Relation[];
+  mode?: "prerequisite" | "contextual";
   labels?: {
     prerequisites: string;
+    successors?: string;
     related: string;
     empty: string;
   };
+  ariaLabel?: string;
 }
 
 const {
   prerequisites = [],
+  successors,
   related = [],
+  mode = "prerequisite",
   labels = {
     prerequisites: "前提知識",
     related: "関連知識",
     empty: "登録されていません",
   },
+  ariaLabel = "知識の関係",
 } = Astro.props;
 
-const groups = [
-  { title: labels.prerequisites, entries: prerequisites },
-  { title: labels.related, entries: related },
-];
+const groups = mode === "contextual"
+  ? successors === undefined
+    ? [{ title: labels.related, entries: related }]
+    : [
+        { title: labels.prerequisites, entries: prerequisites },
+        { title: labels.successors ?? "継承先", entries: successors },
+        { title: labels.related, entries: related },
+      ]
+  : [
+      { title: labels.prerequisites, entries: prerequisites },
+      { title: labels.related, entries: related },
+    ];
 ---
 
-<aside class="relations" aria-label="知識の関係">
+<aside class="relations" aria-label={ariaLabel}>
   {
     groups.map(({ title, entries }) => (
       <section>

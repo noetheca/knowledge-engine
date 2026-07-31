@@ -14,13 +14,19 @@
     },
     "./components/KnowledgeLayout.astro": "./src/components/KnowledgeLayout.astro",
     "./components/ConceptRelations.astro": "./src/components/ConceptRelations.astro",
+    "./components/KnowledgeGraph.astro": "./src/components/KnowledgeGraph.astro",
     "./styles/base.css": "./src/styles/base.css"
   },
   "files": [
     "dist",
+    "src/client",
     "src/components",
+    "src/graph",
+    "src/i18n",
     "src/styles",
-    "README.md"
+    "src/types.ts",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
