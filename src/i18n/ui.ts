@@ -23,6 +23,22 @@ export interface UiStrings {
     settings: string;
     nodeSize: string;
     repulsionStrength: string;
+    attractionStrength: string;
+    groupStrength: string;
+    groupSeparation: string;
+    hierarchyEnabled: string;
+    hierarchyStrength: string;
+    simulationExplanation: string;
+    simulationRun: string;
+    simulationStop: string;
+    simulationRunning: string;
+    simulationSettled: string;
+    simulationStopped: string;
+    simulationReducedMotion: string;
+    simulationEngine: string;
+    simulationWorkerEngine: string;
+    simulationMainThreadEngine: string;
+    simulationReset: string;
     interactionHint: string;
     viewportLabel: string;
     legend: string;
@@ -90,9 +106,26 @@ const stringsByLocale: Record<string, UiStrings> = {
       settings: "グラフ設定",
       nodeSize: "ノードサイズ",
       repulsionStrength: "反発の強さ",
+      attractionStrength: "引力の強さ",
+      groupStrength: "グループ内のまとまり",
+      groupSeparation: "グループ間の間隔",
+      hierarchyEnabled: "前提順序の力を使う",
+      hierarchyStrength: "前提順序の力",
+      simulationExplanation:
+        "近い知識ほど強く引き合い、ノード同士は反発します。前提順序とグループは固定座標ではなく、上下左右へ動ける柔らかな力として働きます。",
+      simulationRun: "力学演算を再開",
+      simulationStop: "力学演算を一時休止",
+      simulationRunning: "力学演算中",
+      simulationSettled: "安定配置を維持中",
+      simulationStopped: "力学演算を一時休止中",
+      simulationReducedMotion: "動きを減らす設定に合わせた静止表示です",
+      simulationEngine: "演算方式",
+      simulationWorkerEngine: "並列処理（Web Worker）",
+      simulationMainThreadEngine: "互換処理（メインスレッド）",
+      simulationReset: "標準設定に戻す",
       interactionHint: "背景をドラッグで移動・ノードは直接ドラッグ",
       viewportLabel: "前提知識を上から下へ示す知識マップ",
-      legend: "実線は「前提知識 → 次に学ぶ知識」を示します",
+      legend: "細い線は前提関係です。ノードを選ぶと直接の関係を強調します",
       relatedLegend: "点線は選択した知識の関連を示します",
       inspectorLabel: "選択した知識の詳細",
       accessibleList: "アクセシブルな一覧",
@@ -155,9 +188,26 @@ const stringsByLocale: Record<string, UiStrings> = {
       settings: "Graph settings",
       nodeSize: "Node size",
       repulsionStrength: "Repulsion strength",
+      attractionStrength: "Attraction strength",
+      groupStrength: "Within-group cohesion",
+      groupSeparation: "Between-group spacing",
+      hierarchyEnabled: "Use prerequisite-order force",
+      hierarchyStrength: "Prerequisite-order force",
+      simulationExplanation:
+        "Nearby concepts attract more strongly while nodes repel one another. Prerequisite order and groups act as soft forces, so nodes remain free to move in both axes.",
+      simulationRun: "Resume physics",
+      simulationStop: "Pause physics",
+      simulationRunning: "Physics running",
+      simulationSettled: "Maintaining a stable layout",
+      simulationStopped: "Physics paused",
+      simulationReducedMotion: "Static view follows your reduced-motion setting",
+      simulationEngine: "Computation",
+      simulationWorkerEngine: "Parallel (Web Worker)",
+      simulationMainThreadEngine: "Compatibility (main thread)",
+      simulationReset: "Reset defaults",
       interactionHint: "Drag the canvas to move; drag nodes directly",
       viewportLabel: "Knowledge map ordered from prerequisites to later concepts",
-      legend: "Solid lines show “prerequisite → next concept”",
+      legend: "Thin lines show prerequisites; selecting a node emphasizes its direct links",
       relatedLegend: "Dotted lines show relations for the selected concept",
       inspectorLabel: "Selected knowledge details",
       accessibleList: "Accessible list",

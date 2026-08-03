@@ -1,0 +1,21 @@
+---
+import "katex/dist/katex.min.css";
+import "../styles/article-directives.css";
+---
+
+<script>
+  import { initArticleDirectives } from "../client/article-directives";
+
+  const documentWithHandler = document as Document & {
+    __noethecaArticleDirectivesPageLoad?: EventListener;
+  };
+  const previousHandler = documentWithHandler.__noethecaArticleDirectivesPageLoad;
+  if (previousHandler) {
+    document.removeEventListener("astro:page-load", previousHandler);
+  }
+  const pageLoadHandler: EventListener = () => initArticleDirectives();
+  documentWithHandler.__noethecaArticleDirectivesPageLoad = pageLoadHandler;
+
+  initArticleDirectives();
+  document.addEventListener("astro:page-load", pageLoadHandler);
+</script>

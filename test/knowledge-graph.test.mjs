@@ -16,27 +16,6 @@ const node = (id, overrides = {}) => ({
   ...overrides,
 });
 
-const distanceToSegment = (point, start, end) => {
-  const segmentX = end.x - start.x;
-  const segmentY = end.y - start.y;
-  const lengthSquared = segmentX * segmentX + segmentY * segmentY;
-  const projection = lengthSquared > 0
-    ? Math.max(
-        0,
-        Math.min(
-          1,
-          ((point.x - start.x) * segmentX +
-            (point.y - start.y) * segmentY) /
-            lengthSquared,
-        ),
-      )
-    : 0;
-  return Math.hypot(
-    point.x - (start.x + segmentX * projection),
-    point.y - (start.y + segmentY * projection),
-  );
-};
-
 test("creates prerequisite edges and reverse dependent relations", () => {
   const graph = createKnowledgeGraphModel([
     node("root"),
@@ -144,21 +123,44 @@ test("rejects duplicate nodes and missing prerequisites", () => {
   );
 });
 
-test("lays out multiple roots above their dependent node", () => {
-  const graph = createKnowledgeGraphModel([
+test("lays out prerequisites in deterministic top-to-bottom layers", () => {
+  const concepts = [
     node("first"),
     node("second"),
     node("child", { prerequisites: ["first", "second"] }),
-  ]);
-  const layout = layoutKnowledgeGraph(graph);
-  const positions = new Map(layout.nodes.map((item) => [item.id, item]));
+    node("leaf", { prerequisites: ["child"] }),
+  ];
+  const first = layoutKnowledgeGraph(createKnowledgeGraphModel(concepts));
+  const reversed = layoutKnowledgeGraph(
+    createKnowledgeGraphModel(concepts.toReversed()),
+  );
+  const positions = new Map(first.nodes.map((item) => [item.id, item]));
 
   assert.equal(positions.get("first")?.y, positions.get("second")?.y);
   assert.ok(
     (positions.get("child")?.y ?? 0) > (positions.get("first")?.y ?? 0),
   );
-  assert.equal(layout.edges.length, 2);
-  assert.match(layout.edges[0]?.path ?? "", /^M .+ L /);
+  assert.ok(
+    (positions.get("leaf")?.y ?? 0) > (positions.get("child")?.y ?? 0),
+  );
+  assert.equal(
+    (positions.get("child")?.y ?? 0) - (positions.get("first")?.y ?? 0),
+    288,
+  );
+  assert.deepEqual(
+    first.nodes.map(({ id, rank }) => [id, rank]),
+    [["first", 0], ["second", 0], ["child", 1], ["leaf", 2]],
+  );
+  assert.deepEqual(
+    first.nodes
+      .map(({ id, x, y }) => ({ id, x, y }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    reversed.nodes
+      .map(({ id, x, y }) => ({ id, x, y }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
+  assert.ok(first.edges.every(({ path }) => /^M .+ (?:C|L) /.test(path)));
+  assert.ok(first.edges.every(({ arrowPoints }) => Boolean(arrowPoints)));
 });
 
 test("refuses to lay out a prerequisite cycle", () => {
@@ -173,7 +175,7 @@ test("refuses to lay out a prerequisite cycle", () => {
   );
 });
 
-test("wraps a large root layer into a compact grid", () => {
+test("wraps a large layer into a compact non-overlapping grid", () => {
   const graph = createKnowledgeGraphModel(
     Array.from({ length: 49 }, (_, index) => node(`node-${index}`)),
   );
@@ -181,105 +183,99 @@ test("wraps a large root layer into a compact grid", () => {
   const distinctRows = new Set(layout.nodes.map(({ y }) => y));
 
   assert.equal(distinctRows.size, 7);
-  assert.equal(layout.width, 2032);
-});
-
-test("settles contextual graphs into a deterministic organic layout", () => {
-  const concepts = Array.from({ length: 49 }, (_, index) =>
-    node(`node-${String(index).padStart(2, "0")}`, {
-      related:
-        index < 44
-          ? [
-              `node-${String((index + 1) % 44).padStart(2, "0")}`,
-              ...(index < 19
-                ? [`node-${String((index + 7) % 44).padStart(2, "0")}`]
-                : []),
-            ]
-          : index === 44
-            ? ["node-45"]
-          : [],
-    }),
-  );
-  const graph = createKnowledgeGraphModel(concepts);
-  const first = layoutKnowledgeGraph(graph, { strategy: "contextual" });
-  const second = layoutKnowledgeGraph(graph, { strategy: "contextual" });
-  const reversed = layoutKnowledgeGraph(
-    createKnowledgeGraphModel(concepts.toReversed()),
-    { strategy: "contextual" },
-  );
-
-  assert.deepEqual(first, second);
-  assert.deepEqual(
-    first.nodes
-      .map(({ id, x, y }) => ({ id, x, y }))
-      .sort((left, right) => left.id.localeCompare(right.id)),
-    reversed.nodes
-      .map(({ id, x, y }) => ({ id, x, y }))
-      .sort((left, right) => left.id.localeCompare(right.id)),
-  );
-  assert.equal(first.nodes.length, 49);
-  assert.equal(first.edges.length, 64);
-  assert.ok(first.width > 0 && first.height > 0);
-
-  const distinctX = new Set(first.nodes.map(({ x }) => x));
-  const distinctY = new Set(first.nodes.map(({ y }) => y));
-  assert.ok(distinctX.size > 20);
-  assert.ok(distinctY.size > 20);
-
-  for (let index = 0; index < first.nodes.length; index += 1) {
-    const left = first.nodes[index];
-    assert.ok(left);
-    assert.ok(left.x >= 0 && left.y >= 0);
-    assert.ok(left.x + left.width <= first.width);
-    assert.ok(left.y + left.height <= first.height);
+  assert.equal(layout.width, 2920);
+  for (let index = 0; index < layout.nodes.length; index += 1) {
+    const first = layout.nodes[index];
+    assert.ok(first);
     for (
       let comparisonIndex = index + 1;
-      comparisonIndex < first.nodes.length;
+      comparisonIndex < layout.nodes.length;
       comparisonIndex += 1
     ) {
-      const right = first.nodes[comparisonIndex];
-      assert.ok(right);
-      const overlapX =
-        Math.min(left.x + left.width, right.x + right.width) -
-        Math.max(left.x, right.x);
-      const overlapY =
-        Math.min(left.y + left.height, right.y + right.height) -
-        Math.max(left.y, right.y);
-      assert.ok(overlapX <= 1 || overlapY <= 1);
+      const second = layout.nodes[comparisonIndex];
+      assert.ok(second);
+      const overlapsX =
+        first.x < second.x + second.width &&
+        first.x + first.width > second.x;
+      const overlapsY =
+        first.y < second.y + second.height &&
+        first.y + first.height > second.y;
+      assert.equal(overlapsX && overlapsY, false);
     }
   }
 });
 
-test("does not use selection-only related edges as contextual forces", () => {
-  const inputs = [
-    node("left", { related: ["right"] }),
-    node("right"),
-  ];
-  const withRelated = layoutKnowledgeGraph(createKnowledgeGraphModel(inputs), {
-    strategy: "contextual",
-  });
-  const withoutRelated = layoutKnowledgeGraph(
-    createKnowledgeGraphModel(inputs.map((entry) => ({ ...entry, related: [] }))),
-    { strategy: "contextual" },
-  );
+test("keeps same-rank groups contiguous with wider group boundaries", () => {
+  const graph = createKnowledgeGraphModel([
+    node("a-1", { group: "red" }),
+    node("a-2", { group: "blue" }),
+    node("b-1", { group: "red" }),
+    node("b-2", { group: "blue" }),
+  ]);
+  const layout = layoutKnowledgeGraph(graph, { maxColumns: 4 });
+  const ordered = [...layout.nodes].sort((left, right) => left.x - right.x);
 
-  assert.deepEqual(withRelated.nodes, withoutRelated.nodes);
-  assert.equal(withRelated.edges.length, 1);
-  assert.equal(withoutRelated.edges.length, 0);
+  assert.deepEqual(
+    ordered.map(({ id, groupId, rank }) => [id, groupId, rank]),
+    [
+      ["a-1", "red", 0],
+      ["b-1", "red", 0],
+      ["a-2", "blue", 0],
+      ["b-2", "blue", 0],
+    ],
+  );
+  const gaps = ordered.slice(1).map(
+    (entry, index) => entry.x - (ordered[index].x + ordered[index].width),
+  );
+  assert.deepEqual(gaps, [72, 220, 72]);
 });
 
-test("places a directed contextual target below its source", () => {
-  const graph = createKnowledgeGraphModel(
-    [node("source"), node("target")],
-    { contextualRelations: [{ source: "source", target: "target" }] },
-  );
-  const layout = layoutKnowledgeGraph(graph, { strategy: "contextual" });
+test("orders adjacent layers to reduce prerequisite crossings", () => {
+  const graph = createKnowledgeGraphModel([
+    node("a"),
+    node("b"),
+    node("left-child", { prerequisites: ["b"] }),
+    node("right-child", { prerequisites: ["a"] }),
+  ]);
+  const layout = layoutKnowledgeGraph(graph, { maxColumns: 4 });
   const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
 
-  assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
+  assert.equal(positions.get("a")?.x, positions.get("right-child")?.x);
+  assert.equal(positions.get("b")?.x, positions.get("left-child")?.x);
 });
 
-test("places a same-period contextual target below its source", () => {
+test("keeps related knowledge in the model but out of the map edges", () => {
+  const graph = createKnowledgeGraphModel([
+    node("left", { related: ["right"] }),
+    node("right"),
+  ]);
+  const layout = layoutKnowledgeGraph(graph);
+
+  assert.deepEqual(graph.nodes.map(({ related }) => related), [
+    ["right"],
+    ["left"],
+  ]);
+  assert.deepEqual(layout.edges, []);
+});
+
+test("draws only prerequisite edges in the default map", () => {
+  const graph = createKnowledgeGraphModel(
+    [
+      node("root", { related: ["aside"] }),
+      node("child", { prerequisites: ["root"] }),
+      node("aside"),
+    ],
+    { contextualRelations: [{ source: "aside", target: "child" }] },
+  );
+  const layout = layoutKnowledgeGraph(graph);
+
+  assert.deepEqual(
+    layout.edges.map(({ source, target, kind }) => [source, target, kind]),
+    [["root", "child", "prerequisite"]],
+  );
+});
+
+test("places contextual targets below their sources without force simulation", () => {
   const graph = createKnowledgeGraphModel(
     [node("source"), node("target")],
     { contextualRelations: [{ source: "source", target: "target" }] },
@@ -291,95 +287,20 @@ test("places a same-period contextual target below its source", () => {
   const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
 
   assert.ok((positions.get("source")?.y ?? 0) < (positions.get("target")?.y ?? 0));
-});
-
-test("spreads a dense same-period cohort across several rows", () => {
-  const concepts = Array.from({ length: 10 }, (_, index) =>
-    node(`same-period-${String(index).padStart(2, "0")}`),
+  assert.deepEqual(
+    layout.edges.map(({ kind }) => kind),
+    ["contextual"],
   );
-  const graph = createKnowledgeGraphModel(concepts);
-  const layout = layoutKnowledgeGraph(graph, {
-    strategy: "contextual",
-    chronology: Object.fromEntries(concepts.map(({ id }) => [id, 2010])),
-  });
-  const rows = new Set(layout.nodes.map(({ y }) => Math.round(y)));
-
-  assert.ok(rows.size >= 3);
-  for (let index = 0; index < layout.nodes.length; index += 1) {
-    const first = layout.nodes[index];
-    if (!first) {
-      continue;
-    }
-    for (let comparisonIndex = index + 1; comparisonIndex < layout.nodes.length; comparisonIndex += 1) {
-      const second = layout.nodes[comparisonIndex];
-      if (!second) {
-        continue;
-      }
-      const overlapsX = first.x < second.x + second.width && first.x + first.width > second.x;
-      const overlapsY = first.y < second.y + second.height && first.y + first.height > second.y;
-      assert.equal(overlapsX && overlapsY, false);
-    }
-  }
-});
-
-test("keeps unrelated nodes clear of directional edge segments", () => {
-  const concepts = [
-    node("source"),
-    ...Array.from({ length: 7 }, (_, index) => node(`unrelated-${index}`)),
-    node("target"),
-  ];
-  const graph = createKnowledgeGraphModel(concepts, {
-    contextualRelations: [{ source: "source", target: "target" }],
-  });
-  const layout = layoutKnowledgeGraph(graph, {
-    strategy: "contextual",
-    chronology: {
-      source: 1900,
-      ...Object.fromEntries(
-        concepts
-          .filter(({ id }) => id.startsWith("unrelated-"))
-          .map(({ id }) => [id, 1950]),
-      ),
-      target: 2000,
-    },
-  });
-  const positions = new Map(layout.nodes.map((entry) => [entry.id, entry]));
-  const source = positions.get("source");
-  const target = positions.get("target");
-  assert.ok(source && target);
-  const sourceCenter = {
-    x: source.x + source.width / 2,
-    y: source.y + source.height / 2,
-  };
-  const targetCenter = {
-    x: target.x + target.width / 2,
-    y: target.y + target.height / 2,
-  };
-
-  for (const concept of concepts.filter(({ id }) => id.startsWith("unrelated-"))) {
-    const position = positions.get(concept.id);
-    assert.ok(position);
-    const clearance = Math.hypot(position.width, position.height) / 2;
-    assert.ok(
-      distanceToSegment(
-        {
-          x: position.x + position.width / 2,
-          y: position.y + position.height / 2,
-        },
-        sourceCenter,
-        targetCenter,
-      ) >= clearance,
-    );
-  }
 });
 
 test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
-  const graph = createKnowledgeGraphModel([
-    node("classical", { related: ["modern"] }),
-    node("modern", { related: ["classical", "postmodern"] }),
-    node("postmodern", { related: ["modern"] }),
-    node("unranked", { related: ["modern"] }),
-  ]);
+  const concepts = [
+    node("classical"),
+    node("modern"),
+    node("postmodern"),
+    node("unranked"),
+  ];
+  const graph = createKnowledgeGraphModel(concepts);
   const options = {
     strategy: "contextual",
     chronology: {
@@ -391,39 +312,24 @@ test("keeps dated contextual nodes in strict old-to-new vertical bands", () => {
   const first = layoutKnowledgeGraph(graph, options);
   const second = layoutKnowledgeGraph(graph, options);
   const positions = new Map(first.nodes.map((item) => [item.id, item]));
-  const classicalY = positions.get("classical")?.y ?? 0;
-  const modernY = positions.get("modern")?.y ?? 0;
-  const postmodernY = positions.get("postmodern")?.y ?? 0;
-  const unrankedY = positions.get("unranked")?.y ?? 0;
 
   assert.deepEqual(first, second);
-  assert.ok(classicalY < modernY);
-  assert.ok(modernY < postmodernY);
-  assert.ok(postmodernY < unrankedY);
+  assert.ok((positions.get("classical")?.y ?? 0) < (positions.get("modern")?.y ?? 0));
+  assert.ok((positions.get("modern")?.y ?? 0) < (positions.get("postmodern")?.y ?? 0));
+  assert.ok((positions.get("postmodern")?.y ?? 0) < (positions.get("unranked")?.y ?? 0));
 });
 
-test("does not invert chronology across a dense contextual graph", () => {
-  const concepts = Array.from({ length: 43 }, (_, index) =>
-    node(`dated-${String(index).padStart(2, "0")}`, {
-      related:
-        index + 1 < 43
-          ? [`dated-${String(index + 1).padStart(2, "0")}`]
-          : [],
-    }),
+test("spreads a dense same-period cohort across compact rows", () => {
+  const concepts = Array.from({ length: 10 }, (_, index) =>
+    node(`same-period-${String(index).padStart(2, "0")}`),
   );
   const graph = createKnowledgeGraphModel(concepts);
-  const chronology = Object.fromEntries(
-    concepts.map(({ id }, index) => [id, 1950 + index]),
-  );
   const layout = layoutKnowledgeGraph(graph, {
     strategy: "contextual",
-    chronology,
+    chronology: Object.fromEntries(concepts.map(({ id }) => [id, 2010])),
   });
-  const ordered = [...layout.nodes].sort(
-    (left, right) => chronology[left.id] - chronology[right.id],
-  );
+  const rows = new Set(layout.nodes.map(({ y }) => y));
 
-  for (let index = 1; index < ordered.length; index += 1) {
-    assert.ok(ordered[index - 1].y < ordered[index].y);
-  }
+  assert.equal(rows.size, 3);
+  assert.equal(layout.edges.length, 0);
 });

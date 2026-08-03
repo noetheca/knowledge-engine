@@ -126,8 +126,13 @@ button:focus-visible {
 
 .site-context {
   overflow: hidden;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.site-context:hover {
+  color: var(--text);
 }
 
 .site-actions {

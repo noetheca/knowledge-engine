@@ -1,13 +1,19 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { parse } from "yaml";
+import { validateArticleDirectives } from "./markdown/directives.js";
+import { isAllowedSourceUrl } from "./urls.js";
 import {
   CONTENT_SCHEMA_VERSION,
   CONTENT_STATUSES,
+  READING_LEVEL_CURRICULUM_PATTERN,
+  READING_LEVEL_GRADE_MAX,
+  READING_LEVEL_GRADE_MIN,
   type Concept,
   type ConceptMetadata,
   type ConceptTranslation,
   type KnowledgeBase,
+  type ReadingLevel,
   type TranslationMetadata,
   type ValidationIssue,
 } from "./types.js";
@@ -18,7 +24,6 @@ const LOCALE_PATTERN = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-[A-Z]{2}|\d{3})?$/;
 const MARKDOWN_LINK_PATTERN =
   /!?\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
 const UNSAFE_MARKDOWN_PATTERNS = [
-  { code: "raw-html", pattern: /<\/?[A-Za-z][^>]*>/ },
   { code: "javascript-url", pattern: /\bjavascript\s*:/i },
   { code: "inline-event-handler", pattern: /\bon[a-z]+\s*=/i },
 ];
@@ -41,6 +46,18 @@ function stringArray(value: unknown): string[] | undefined {
     return undefined;
   }
   return value;
+}
+
+function isReadingLevel(value: unknown): value is ReadingLevel {
+  return (
+    isRecord(value) &&
+    typeof value.curriculum === "string" &&
+    READING_LEVEL_CURRICULUM_PATTERN.test(value.curriculum) &&
+    typeof value.grade === "number" &&
+    Number.isInteger(value.grade) &&
+    value.grade >= READING_LEVEL_GRADE_MIN &&
+    value.grade <= READING_LEVEL_GRADE_MAX
+  );
 }
 
 function parseConceptMetadata(
@@ -149,13 +166,32 @@ function parseTranslationMetadata(
     return undefined;
   }
 
+  const sourcesAreValid =
+    Array.isArray(raw.sources) &&
+    raw.sources.every((source) => {
+      if (typeof source === "string") {
+        return isAllowedSourceUrl(source);
+      }
+      return (
+        isRecord(source) &&
+        typeof source.title === "string" &&
+        source.title.trim().length > 0 &&
+        typeof source.url === "string" &&
+        isAllowedSourceUrl(source.url) &&
+        (source.note === undefined || typeof source.note === "string")
+      );
+    });
+  const readingLevelIsValid =
+    raw.readingLevel === undefined || isReadingLevel(raw.readingLevel);
+
   const valid =
     typeof raw.locale === "string" &&
     typeof raw.title === "string" &&
     raw.title.trim().length > 0 &&
     typeof raw.summary === "string" &&
     raw.summary.trim().length > 0 &&
-    Array.isArray(raw.sources) &&
+    sourcesAreValid &&
+    readingLevelIsValid &&
     typeof raw.status === "string" &&
     CONTENT_STATUSES.includes(raw.status as (typeof CONTENT_STATUSES)[number]);
 
@@ -174,8 +210,23 @@ function parseTranslationMetadata(
   if (typeof raw.summary !== "string" || raw.summary.trim().length === 0) {
     issues.push(issue("missing-summary", "summary must be a non-empty string.", file));
   }
-  if (!Array.isArray(raw.sources)) {
-    issues.push(issue("invalid-sources", "sources must be an array.", file));
+  if (!sourcesAreValid) {
+    issues.push(
+      issue(
+        "invalid-sources",
+        "sources must be an array of http(s) URLs or titled http(s) URL mappings.",
+        file,
+      ),
+    );
+  }
+  if (!readingLevelIsValid) {
+    issues.push(
+      issue(
+        "invalid-reading-level",
+        `readingLevel must contain a curriculum ID and an integer grade from ${READING_LEVEL_GRADE_MIN} to ${READING_LEVEL_GRADE_MAX}.`,
+        file,
+      ),
+    );
   }
   if (
     typeof raw.status !== "string" ||
@@ -200,6 +251,9 @@ function parseTranslationMetadata(
     summary: raw.summary as string,
     sources: raw.sources as unknown[],
     status: raw.status as TranslationMetadata["status"],
+    ...(isReadingLevel(raw.readingLevel)
+      ? { readingLevel: raw.readingLevel }
+      : {}),
   };
 }
 
@@ -233,6 +287,22 @@ async function validateMarkdown(
         ),
       );
     }
+  }
+
+  for (const directive of await validateArticleDirectives(translation.body)) {
+    const location =
+      directive.line === undefined
+        ? ""
+        : ` at ${directive.line}:${directive.column ?? 1}`;
+    issues.push(
+      issue(
+        directive.code.startsWith("unsafe-markdown-")
+          ? directive.code
+          : `article-directive-${directive.code}`,
+        `${directive.message}${location}`,
+        translation.filePath,
+      ),
+    );
   }
 
   for (const match of translation.body.matchAll(MARKDOWN_LINK_PATTERN)) {

@@ -6,6 +6,10 @@ export interface KnowledgeGraphNodeInput {
   summary: string;
   status: ContentStatus;
   href: string;
+  /** Stable presentation cluster supplied by the consuming domain. */
+  group?: string;
+  /** Localized label for the presentation cluster. */
+  groupLabel?: string;
   prerequisites: string[];
   related: string[];
 }

@@ -41,6 +41,7 @@ const currentLanguage =
   languageOptions.find((language) => language.locale === locale) ??
   languageOptions[0];
 const ui = getUiStrings(locale);
+const domainHomeUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/`;
 ---
 
 <!doctype html>
@@ -73,8 +74,8 @@ const ui = getUiStrings(locale);
     <a class="skip-link" href="#main">{ui.layout.skipLink}</a>
     <header class="site-header">
       <div class="site-identity">
-        <a class="brand" href={import.meta.env.BASE_URL}>noetheca</a>
-        <span class="site-context">{domain}</span>
+        <a class="brand" href="https://noetheca.github.io/">noetheca</a>
+        <a class="site-context" href={domainHomeUrl}>{domain}</a>
       </div>
       <div class="site-actions">
         <details class="language-menu" data-language-menu>

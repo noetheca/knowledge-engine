@@ -1,0 +1,1862 @@
+.prose ruby {
+  ruby-position: over;
+}
+
+.prose rt {
+  color: var(--muted);
+  font-size: 0.6em;
+}
+
+.ke-math--display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.2rem;
+}
+
+.ke-math--display > .katex-display {
+  margin-block: 1.15rem;
+}
+
+.ke-callout,
+.ke-details,
+.ke-interactive {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.9rem;
+  margin-block: 1.75rem;
+}
+
+.ke-callout {
+  border-left-width: 0.55rem;
+  padding: 1rem 1.15rem;
+}
+
+.ke-callout--tip {
+  border-style: solid solid solid double;
+}
+
+.ke-callout--warning {
+  border-left-style: dashed;
+}
+
+.ke-callout--important {
+  box-shadow: 0.3rem 0.3rem 0 var(--shadow);
+}
+
+.ke-callout__title {
+  align-items: center;
+  display: flex;
+  font-weight: 800;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.ke-callout__title span {
+  align-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  display: inline-flex;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  height: 1.5rem;
+  justify-content: center;
+  line-height: 1;
+  width: 1.5rem;
+}
+
+.ke-callout > :last-child {
+  margin-bottom: 0;
+}
+
+.ke-details {
+  overflow: clip;
+}
+
+.ke-details > summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.9rem 1.1rem;
+}
+
+.ke-details[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ke-details > :not(summary) {
+  margin-inline: 1.1rem;
+}
+
+.ke-details > :last-child {
+  margin-bottom: 1.1rem;
+}
+
+.ke-interactive {
+  box-shadow: 0.35rem 0.35rem 0 var(--shadow);
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.ke-interactive figcaption {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.ke-interactive__controls {
+  align-items: end;
+  border-block: 1px solid var(--line-soft);
+  display: grid;
+  gap: 0.8rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  padding-block: 1rem;
+}
+
+.ke-interactive__controls[hidden] {
+  display: none;
+}
+
+.ke-family [data-family-inline-action][hidden] {
+  display: none !important;
+}
+
+.ke-interactive__control {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ke-interactive__control-heading {
+  align-items: baseline;
+  display: flex;
+  font-weight: 700;
+  justify-content: space-between;
+}
+
+.ke-interactive__control input {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+.ke-interactive__control input[type="range"] {
+  cursor: pointer;
+  min-block-size: 2.75rem;
+}
+
+.ke-interactive__controls output {
+  font-variant-numeric: tabular-nums;
+}
+
+.ke-interactive__controls button {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+  min-height: 2.75rem;
+  padding-inline: 1rem;
+}
+
+.ke-interactive__controls button:active {
+  background: var(--text);
+  color: var(--background);
+}
+
+.ke-interactive__number-toggle {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  grid-column: 1 / -1;
+  min-block-size: 2.75rem;
+}
+
+.ke-interactive__number-toggle input {
+  accent-color: var(--accent);
+  block-size: 1.15rem;
+  inline-size: 1.15rem;
+  margin: 0;
+}
+
+.ke-interactive__number-toggle label {
+  font-weight: 700;
+}
+
+.ke-interactive__unit {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  display: grid;
+  font-weight: 700;
+  gap: 0.1rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-block: 1rem 0;
+  padding: 0.55rem 0.75rem;
+}
+
+.ke-interactive__unit .ke-math--display {
+  padding: 0;
+}
+
+.ke-interactive__unit .katex-display {
+  margin-block: 0.25rem;
+}
+
+.ke-interactive__scale-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-block: 0.85rem 0;
+}
+
+.ke-interactive__scale-note small {
+  display: block;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+}
+
+.ke-interactive__viewport {
+  border-block: 1px solid var(--line-soft);
+  margin-block: 1rem;
+  max-block-size: min(60vh, 28rem);
+  max-inline-size: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-block: 0.75rem;
+  scrollbar-gutter: stable both-edges;
+  touch-action: pan-x pan-y;
+}
+
+.ke-interactive__viewport:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ke-interactive__stage {
+  inline-size: max-content;
+  min-inline-size: 100%;
+}
+
+.ke-interactive__svg {
+  color: var(--text);
+  display: block;
+  height: auto;
+  margin-inline: auto;
+  max-width: none;
+}
+
+.ke-interactive__grid {
+  fill: var(--accent-soft);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.ke-interactive__dimension-bracket {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.ke-interactive__dimension-label,
+.ke-interactive__cell-numbers {
+  fill: currentColor;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.ke-interactive__dimension-label {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.ke-interactive__dimension-label--unit {
+  font-size: 12px;
+}
+
+.ke-interactive__cell-numbers {
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.ke-interactive__axis {
+  fill: currentColor;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.ke-interactive__result {
+  border-top: 1px solid var(--line-soft);
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 0;
+  padding-top: 1rem;
+  text-align: center;
+}
+
+.ke-family__visual {
+  --ke-family-visual-background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+  background: var(--ke-family-visual-background);
+  border: 1px solid var(--line-soft);
+  border-radius: 0.75rem;
+  margin-block: 1rem;
+  min-block-size: 14rem;
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+  padding: 1rem;
+}
+
+.ke-family__visual:focus-visible {
+  outline: 4px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.ke-family__svg {
+  color: var(--text);
+  display: block;
+  inline-size: min(100%, 42rem);
+  margin-inline: auto;
+  min-inline-size: 24rem;
+}
+
+.ke-family__svg circle,
+.ke-family__svg ellipse,
+.ke-family__svg line,
+.ke-family__svg path,
+.ke-family__svg polygon,
+.ke-family__svg rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.ke-family__svg text {
+  fill: currentColor;
+  font-family: inherit;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  paint-order: stroke fill;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+  vector-effect: non-scaling-stroke;
+}
+
+.ke-family__counter-mat {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(10rem, 1fr));
+  min-inline-size: 22rem;
+}
+
+.ke-family__counter-groups {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  min-inline-size: 22rem;
+}
+
+.ke-family__counter-division {
+  display: grid;
+  gap: 0.9rem;
+  min-inline-size: 22rem;
+}
+
+.ke-family__counter-inverse {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr) auto minmax(10rem, 1fr);
+  min-inline-size: 34rem;
+}
+
+.ke-family__counter-inverse > .ke-family__counter-zone {
+  grid-template-columns: repeat(5, 1.7rem);
+  min-block-size: 8rem;
+  padding: 0.75rem;
+}
+
+.ke-family__counter-inverse .ke-family__counter {
+  block-size: 1.5rem;
+  inline-size: 1.5rem;
+}
+
+.ke-family__counter-inverse > span {
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
+.ke-family__counter-remainder {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
+  border: 2px dashed var(--line);
+  border-radius: 0.8rem;
+  display: flex;
+  gap: 0.8rem;
+  min-block-size: 4.5rem;
+  padding: 0.7rem 1rem;
+}
+
+.ke-family__counter-remainder > div {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.ke-family__counter-array {
+  align-items: center;
+  display: grid;
+  gap: 0.45rem;
+  justify-content: center;
+  min-block-size: 10rem;
+  min-inline-size: 22rem;
+}
+
+.ke-family__counter-array > div {
+  display: flex;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.ke-family__counter-groups .ke-family__counter-zone {
+  grid-template-columns: repeat(auto-fit, minmax(2.2rem, 2.2rem));
+  min-block-size: 7rem;
+}
+
+.ke-family__counter-zone {
+  align-content: start;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 1rem;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(5, 2.2rem);
+  justify-content: center;
+  min-block-size: 10rem;
+  padding: 1rem;
+}
+
+.ke-family__counter-mat--single {
+  grid-template-columns: minmax(12rem, 24rem);
+  justify-content: center;
+}
+
+.ke-family__counter {
+  background: var(--accent);
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  block-size: 2rem;
+  display: inline-block;
+  inline-size: 2rem;
+}
+
+.ke-family__counter-label {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+}
+
+.ke-family__counter-label > p {
+  font-weight: 750;
+  margin: 0;
+}
+
+.ke-family__counter--numbered {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.ke-family__counter--numbered > b {
+  color: var(--surface);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.ke-family__counter-compare {
+  display: grid;
+  gap: 1rem;
+}
+
+.ke-family__counter-pairs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+}
+
+.ke-family__counter-pair {
+  align-items: center;
+  display: grid;
+  gap: 0.2rem;
+  grid-template-rows: auto 1.4rem auto;
+  justify-items: center;
+}
+
+.ke-family__counter-pair-line {
+  border-inline-start: 2px solid var(--line);
+  block-size: 1.4rem;
+}
+
+.ke-family__counter-extras {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ke-family__counter-extras > div {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 0.65rem;
+  padding: 0.65rem;
+}
+
+.ke-family__counter--second {
+  background: var(--surface);
+  border-style: double;
+  border-width: 5px;
+}
+
+.ke-family__counter-subtraction {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(12rem, 1fr) auto minmax(12rem, 1fr);
+}
+
+.ke-family__counter-subtraction-stage {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ke-family__counter--removed {
+  background: var(--surface);
+  opacity: 0.55;
+  position: relative;
+}
+
+.ke-family__counter--removed::after {
+  background: currentColor;
+  content: "";
+  height: 2px;
+  left: -0.2rem;
+  position: absolute;
+  top: 0.85rem;
+  transform: rotate(-35deg);
+  width: 2.35rem;
+}
+
+.ke-family__counter-ten-decomposition,
+.ke-family__counter-make-ten {
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
+  border: 2px dashed var(--line);
+  border-radius: 0.8rem;
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+  padding: 0.8rem;
+}
+
+.ke-family__counter-ten-decomposition[hidden],
+.ke-family__counter-make-ten[hidden] {
+  display: none;
+}
+
+.ke-family__counter-ten-decomposition > div {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ke-family__counter-ten-decomposition [data-counter-ten-pieces] {
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: repeat(5, 0.75rem);
+}
+
+.ke-family__ten-bundle {
+  align-items: center;
+  background: var(--accent);
+  border: 3px solid var(--text);
+  color: var(--surface);
+  display: inline-flex;
+  font-weight: 900;
+  height: 3rem;
+  justify-content: center;
+  width: 3rem;
+}
+
+.ke-family__counter-make-ten {
+  grid-template-columns: repeat(2, minmax(12rem, 1fr));
+}
+
+.ke-family__counter-make-ten > strong {
+  grid-column: 1 / -1;
+}
+
+.ke-family__place-board {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: repeat(var(--ke-place-columns, 5), minmax(4.25rem, 1fr));
+  min-inline-size: var(--ke-place-min, 22.85rem);
+}
+
+.ke-family__place-stack {
+  display: grid;
+  gap: 0.65rem;
+  min-inline-size: var(--ke-place-min, 22.85rem);
+}
+
+.ke-family__place-division-result {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ke-family__place-operation-result {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ke-family__place-regroup {
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
+  border: 2px dashed var(--line);
+  border-radius: 0.8rem;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+}
+
+.ke-family__place-regroup[hidden] {
+  display: none;
+}
+
+.ke-family__place-regroup-items {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ke-family__place-regroup-item {
+  align-items: center;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: minmax(8rem, 1fr) auto minmax(8rem, 1fr);
+}
+
+.ke-family__place-regroup-quantity {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  min-block-size: 4.6rem;
+  padding: 0.45rem;
+}
+
+.ke-family__place-regroup-tokens {
+  display: grid;
+  gap: 0.15rem;
+  grid-template-columns: repeat(5, 0.75rem);
+}
+
+.ke-family__place-regroup-arrow {
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.ke-family__place-partials,
+.ke-family__place-distribution {
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+  border: 2px solid var(--line);
+  border-radius: 0.8rem;
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+}
+
+.ke-family__place-partials [data-place-partial-items] {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ke-family__place-partial {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(9rem, 1fr) minmax(12rem, 2fr);
+  padding: 0.55rem;
+}
+
+.ke-family__place-partial-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.ke-family__place-partial-groups span {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  min-inline-size: 1.8rem;
+  padding: 0.15rem 0.3rem;
+  text-align: center;
+}
+
+.ke-family__place-division-groups {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+}
+
+.ke-family__place-division-group {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  min-block-size: 3.5rem;
+  padding: 0.35rem;
+}
+
+.ke-family__place-division-group > span {
+  font-size: 0.8em;
+}
+
+.ke-family__place-division-overflow {
+  align-self: center;
+  padding: 0.35rem;
+}
+
+.ke-family__place-remainder {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
+  border: 2px dashed var(--line);
+  border-radius: 0.7rem;
+  display: flex;
+  gap: 0.75rem;
+  min-block-size: 3.5rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.ke-family__place-remainder > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ke-family__place-stack--decimal .ke-family__place-board {
+  grid-template-columns: repeat(var(--ke-place-columns, 3), minmax(4.25rem, 1fr));
+  min-inline-size: var(--ke-place-min, 13.55rem);
+}
+
+.ke-family__place-operator {
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.ke-family__place-column {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  display: grid;
+  gap: 0.45rem;
+  grid-template-rows: auto 1fr auto;
+  min-block-size: 12rem;
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.ke-family__place-column.is-regroup-source {
+  border-style: dashed;
+  border-width: 3px;
+}
+
+.ke-family__place-column.is-regroup-target {
+  background: var(--accent-soft);
+  border-style: double;
+  border-width: 4px;
+}
+
+.ke-family__place-tokens {
+  align-content: start;
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: repeat(3, 0.9rem);
+  justify-content: center;
+}
+
+.ke-family__counter--place {
+  block-size: 0.75rem;
+  border-width: 1px;
+  inline-size: 0.75rem;
+}
+
+.ke-family__marker,
+.ke-family__fraction-part.is-selected,
+.ke-family__shape--accent,
+.ke-family__chart [data-data-bar="value"],
+.ke-family__cup [data-measure-fill],
+.ke-family__capacity-transfer [data-capacity-fill="remaining"],
+.ke-family__compare-scene [data-measure-compare-bar="value"] {
+  fill: var(--accent) !important;
+}
+
+.ke-family__marker--second,
+.ke-family__chart [data-data-bar="second"],
+.ke-family__compare-scene [data-measure-compare-bar="second"] {
+  fill: var(--surface) !important;
+  stroke-dasharray: 7 5;
+}
+
+.ke-family__capacity-transfer [data-capacity-fill="contained"],
+.ke-family__compare-scene [data-measure-compare-copy] {
+  fill: var(--accent-soft) !important;
+}
+
+.ke-family__compare-scene [data-measure-compare-copy] {
+  stroke-dasharray: 7 5;
+}
+
+.ke-family__compare-scene[hidden],
+.ke-family__capacity-transfer [data-capacity-spill][hidden],
+.ke-family__fraction-operation [data-fraction-result-extra][hidden] {
+  display: none;
+}
+
+.ke-family__capacity-transfer [data-capacity-vessel] {
+  fill: var(--surface);
+}
+
+.ke-family__capacity-transfer [data-capacity-fill],
+.ke-family__capacity-transfer [data-capacity-spill] {
+  stroke: var(--accent);
+}
+
+.ke-family__capacity-transfer [data-capacity-spill] {
+  fill: var(--accent-soft);
+}
+
+.ke-family__capacity-limit,
+.ke-family__compare-start,
+.ke-family__compare-label-divider,
+.ke-family__line-guide {
+  stroke-dasharray: 6 5;
+}
+
+.ke-family__compare-label-divider {
+  opacity: 0.35;
+  stroke-width: 2 !important;
+}
+
+.ke-family__line-guide--second {
+  stroke: var(--accent);
+}
+
+.ke-family__number-line [data-line-tick="middle"][hidden] {
+  display: none;
+}
+
+.ke-family__capacity-arrow,
+.ke-family__compare-copy-arrow {
+  stroke: var(--accent) !important;
+  stroke-width: 4 !important;
+}
+
+.ke-family__chart [data-data-category]:not([data-data-bar]) {
+  fill: var(--accent-soft);
+}
+
+.ke-family__kilometres [data-kilometre-bar="value"] {
+  fill: var(--accent);
+}
+
+.ke-family__kilometres [data-kilometre-bar="second"] {
+  fill: var(--accent-soft);
+}
+
+.ke-family__kilometres text {
+  fill: currentColor;
+  font-size: 1.15rem;
+  font-weight: 800;
+  stroke: none;
+}
+
+.ke-family__area-tiles rect {
+  fill: var(--surface);
+}
+
+.ke-family__area-tiles .ke-family__area-group-frame {
+  fill: color-mix(in srgb, var(--surface) 88%, var(--accent-soft));
+  stroke: var(--line-soft);
+}
+
+.ke-family__area-tiles .ke-family__area-tile {
+  stroke-width: 2;
+}
+
+.ke-family__area-tiles rect.is-selected,
+.ke-family__conservation [data-conservation-fill] {
+  fill: var(--accent);
+}
+
+.ke-family__fraction-part {
+  fill: var(--surface) !important;
+}
+
+.ke-family__fraction-operation text {
+  fill: currentColor;
+  font-size: 2rem;
+  font-weight: 800;
+  stroke: none;
+}
+
+.ke-family__balance [data-balance-beam] rect {
+  fill: var(--surface);
+}
+
+.ke-family__balance [data-balance-beam] text {
+  font-size: 24px;
+}
+
+.ke-family__geometry path,
+.ke-family__geometry rect,
+.ke-family__geometry circle,
+.ke-family__geometry ellipse {
+  fill: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.ke-family__geometry [data-geometry-element] {
+  opacity: 0.35;
+}
+
+.ke-family__geometry [data-geometry-element].is-active {
+  opacity: 1;
+}
+
+.ke-family__geometry .ke-family__geometry-edge {
+  fill: none;
+  stroke-width: 8;
+}
+
+.ke-family__position-axis {
+  fill: none !important;
+  stroke-dasharray: 7 5;
+  stroke-width: 3;
+}
+
+.ke-family__position-reference {
+  fill: var(--surface) !important;
+  stroke-width: 4;
+}
+
+.ke-family__geometry [data-geometry-diameter-line] {
+  stroke-dasharray: 8 7;
+  stroke-width: 3;
+}
+
+.ke-family__geometry [data-geometry-radius-line] {
+  stroke: var(--accent);
+  stroke-width: 6;
+}
+
+.ke-family--geometry-lab .ke-family__visual {
+  overscroll-behavior-inline: contain;
+  padding: 0.75rem;
+}
+
+.ke-family__geometry {
+  min-inline-size: 34rem;
+}
+
+.ke-family__geometry .ke-family__geometry-grid {
+  fill: none;
+  opacity: 0.22;
+  stroke-dasharray: 3 7;
+  stroke-width: 1.5;
+}
+
+.ke-family__geometry .ke-family__geometry-target {
+  fill: var(--surface);
+  opacity: 0.72;
+  stroke-dasharray: 8 7;
+  stroke-width: 3;
+}
+
+.ke-family__geometry .ke-family__geometry-measure,
+.ke-family__geometry [data-right-angle-markers],
+.ke-family__geometry [data-right-angle-corner],
+.ke-family__geometry .ke-family__geometry-equal-marks,
+.ke-family__geometry [data-sphere-distance],
+.ke-family__geometry [data-euclidean-distance] {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+.ke-family__geometry .ke-family__position-reference-leader,
+.ke-family__geometry [data-sphere-label-leader],
+.ke-family__geometry [data-solid-edge-leader] {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 5 5;
+  stroke-width: 3;
+}
+
+.ke-family__geometry .ke-family__geometry-target--outline {
+  fill: none !important;
+  opacity: 1;
+}
+
+.ke-family__geometry .ke-family__geometry-target-underlay {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 9;
+}
+
+.ke-family__geometry [data-equilateral-shape] .ke-family__geometry-equal-marks {
+  stroke: var(--surface);
+  stroke-width: 7;
+}
+
+.ke-family__geometry .ke-family__geometry-hit {
+  cursor: ew-resize;
+  fill: transparent !important;
+  pointer-events: all;
+  stroke: none;
+  touch-action: none;
+}
+
+.ke-family__geometry .ke-family__geometry-drag {
+  cursor: grab;
+  fill: var(--accent) !important;
+  pointer-events: all;
+  stroke: var(--surface);
+  stroke-width: 4;
+  touch-action: none;
+}
+
+.ke-family__geometry .ke-family__geometry-drag:active {
+  cursor: grabbing;
+}
+
+.ke-family__geometry .ke-family__geometry-progress rect:first-child {
+  fill: var(--surface);
+  stroke: var(--line-soft);
+}
+
+.ke-family__geometry .ke-family__geometry-progress [data-geometry-progress] {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.ke-family__geometry .ke-family__geometry-vertices circle,
+.ke-family__geometry [data-between-point],
+.ke-family__geometry [data-point-b],
+.ke-family__geometry [data-euclidean-point] {
+  fill: var(--accent) !important;
+}
+
+.ke-family__geometry [data-compose-piece="left"] path,
+.ke-family__geometry [data-congruence-moving] path,
+.ke-family__geometry [data-tiling-tile]:nth-child(odd) {
+  fill: color-mix(in srgb, var(--accent) 72%, var(--surface));
+}
+
+.ke-family__geometry [data-compose-piece="right"] path,
+.ke-family__geometry [data-tiling-tile]:nth-child(even) {
+  fill: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
+}
+
+.ke-family__geometry [data-tiling-tile] {
+  transition: x 140ms ease, y 140ms ease, width 140ms ease, height 140ms ease;
+}
+
+.ke-family__geometry .ke-family__sphere-outline {
+  fill: color-mix(in srgb, var(--accent-soft) 24%, transparent);
+}
+
+.ke-family__geometry .ke-family__sphere-meridian,
+.ke-family__geometry .ke-family__solid-shape {
+  fill: none;
+}
+
+.ke-family__geometry [data-sphere-cut] {
+  fill: color-mix(in srgb, var(--accent) 42%, var(--surface));
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+.ke-family__geometry--recognize > g,
+.ke-family__geometry [data-compose-piece],
+.ke-family__geometry [data-congruence-moving],
+.ke-family__geometry [data-isosceles-shape],
+.ke-family__geometry [data-equilateral-shape] {
+  transform-box: view-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ke-family__geometry [data-tiling-tile] {
+    transition: none;
+  }
+}
+
+.ke-family__clock circle:first-child,
+.ke-family__cup path,
+.ke-family__ruler rect {
+  fill: var(--surface);
+}
+
+.ke-family__clock [data-clock-hand="hour"] {
+  stroke-width: 8;
+}
+
+.ke-family__clock [data-clock-hand="minute"] {
+  stroke-dasharray: 8 5;
+  stroke-width: 5;
+}
+
+.ke-family__clock [data-clock-hand="second"] {
+  stroke: var(--accent);
+  stroke-width: 5;
+}
+
+.ke-family__duration {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ke-family__day-track {
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: repeat(12, minmax(2rem, 1fr));
+  min-inline-size: 30rem;
+}
+
+.ke-family__day-track > span {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.2rem;
+  text-align: center;
+}
+
+.ke-family__day-track > span.is-active {
+  background: var(--accent);
+  border-width: 2px;
+  color: var(--surface);
+  font-weight: 900;
+}
+
+.ke-family__duration-minutes rect:first-child {
+  fill: var(--surface);
+}
+
+.ke-family__duration-minutes [data-duration-minute-fill] {
+  fill: var(--accent);
+}
+
+.ke-family__measure-marker {
+  stroke: var(--accent) !important;
+  stroke-width: 5 !important;
+}
+
+.ke-family__measure-marker--second {
+  stroke-dasharray: 7 5;
+}
+
+.ke-family__dice-row {
+  align-items: center;
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+  min-block-size: 13rem;
+}
+
+.ke-family__dice-frequency {
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 24rem;
+}
+
+.ke-family__classification,
+.ke-family__frequency,
+.ke-family__pictograph {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(10rem, 1fr));
+  min-inline-size: 22rem;
+}
+
+.ke-family__classification-bin,
+.ke-family__frequency > div,
+.ke-family__pictograph > div {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.8rem;
+  min-block-size: 10rem;
+  padding: 0.8rem;
+}
+
+.ke-family__classification-bin > div,
+.ke-family__pictograph > div > div {
+  align-content: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.ke-family__data-card {
+  background: var(--accent);
+  border: 2px solid var(--text);
+  block-size: 2rem;
+  color: var(--surface);
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.75rem;
+  text-align: center;
+  inline-size: 2rem;
+}
+
+.ke-family__data-card--round {
+  border-radius: 50%;
+}
+
+.ke-family__data-card--square {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ke-family__data-card--diamond {
+  background: var(--accent-soft);
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  color: var(--text);
+}
+
+.ke-family__data-card--accent {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.ke-family__data-card--outline {
+  background: var(--surface);
+  border-style: double;
+  border-width: 5px;
+  color: var(--text);
+}
+
+.ke-family__data-source {
+  background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface));
+  border: 2px solid var(--line);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.7rem;
+}
+
+.ke-family__data-source > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ke-family__data-source .ke-family__data-card {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  justify-content: center;
+}
+
+.ke-family__data-adjustments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.ke-family__data-adjustments > div {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem;
+}
+
+.ke-family__data-adjustments button,
+.ke-family__soroban-column button {
+  min-block-size: 2.75rem;
+  min-inline-size: 2.75rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.ke-family__criteria {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ke-family__criteria > p {
+  margin: 0;
+}
+
+.ke-family__criteria .ke-family__data-card {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  justify-content: center;
+}
+
+.ke-family__evidence [hidden] {
+  display: none;
+}
+
+.ke-family__frequency > div > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-block: 1rem;
+}
+
+.ke-family__tally {
+  border-left: 3px solid currentColor;
+  block-size: 2rem;
+  display: inline-block;
+  inline-size: 0.45rem;
+}
+
+.ke-family__tally--fifth {
+  border-left-color: var(--accent);
+  transform: rotate(45deg);
+}
+
+.ke-family__fruit {
+  background: var(--accent);
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  block-size: 2rem;
+  display: inline-block;
+  inline-size: 2rem;
+  position: relative;
+}
+
+.ke-family__fruit > span {
+  border-left: 2px solid currentColor;
+  block-size: 0.65rem;
+  inset-block-start: -0.5rem;
+  inset-inline-start: 50%;
+  position: absolute;
+  transform: rotate(25deg);
+}
+
+.ke-family__fruit--orange {
+  background: var(--surface);
+  border-style: double;
+  border-width: 5px;
+}
+
+.ke-family__fruit--pear {
+  background: var(--accent-soft);
+  border-radius: 48% 48% 55% 55% / 38% 38% 62% 62%;
+  transform: scaleX(0.82);
+}
+
+.ke-family__data-table {
+  border-collapse: collapse;
+  margin-inline: auto;
+  min-inline-size: 22rem;
+}
+
+.ke-family__data-table caption {
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+
+.ke-family__data-table th,
+.ke-family__data-table td {
+  border: 2px solid var(--line);
+  padding: 0.7rem 1rem;
+  text-align: center;
+}
+
+.ke-family__tool-choice {
+  align-items: stretch;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  min-inline-size: 34rem;
+}
+
+.ke-family__tool-lab {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ke-family__tool-options {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ke-family__object-card,
+.ke-family__tool-card {
+  align-items: center;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  min-block-size: 9rem;
+  padding: 0.75rem;
+  width: 7rem;
+}
+
+.ke-family__tool-card.is-active {
+  box-shadow: inset 0 0 0 4px var(--accent);
+}
+
+.ke-family__tool-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: center;
+}
+
+.ke-family__tool-unit {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.ke-family__tool-unit.is-active {
+  background: var(--accent);
+  border-style: double;
+  border-width: 3px;
+  color: var(--surface);
+  font-weight: 900;
+}
+
+.ke-family__tool-feedback {
+  background: var(--surface);
+  border: 2px dashed var(--line);
+  border-radius: 0.65rem;
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+}
+
+.ke-family__tool-feedback.is-correct {
+  background: var(--accent-soft);
+  border-style: solid;
+}
+
+.ke-family__object-icon {
+  border: 3px solid currentColor;
+  block-size: 3.5rem;
+  display: block;
+  inline-size: 4.5rem;
+}
+
+.ke-family__object-icon--pencil {
+  background: var(--accent);
+  block-size: 1rem;
+  inline-size: 5rem;
+  transform: rotate(-12deg);
+}
+
+.ke-family__object-icon--water {
+  background: var(--accent-soft);
+  border-radius: 55% 45% 60% 40%;
+  inline-size: 3.5rem;
+  transform: rotate(45deg);
+}
+
+.ke-family__object-icon--bag {
+  background: var(--accent-soft);
+  border-radius: 0.5rem;
+  position: relative;
+}
+
+.ke-family__object-icon--bag::before {
+  border: 3px solid currentColor;
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  content: "";
+  display: block;
+  height: 1rem;
+  left: 1rem;
+  position: absolute;
+  top: -1rem;
+  width: 2rem;
+}
+
+.ke-family__tool-arrow {
+  align-self: center;
+  font-size: 2rem;
+}
+
+.ke-family__pencil,
+.ke-family__ruler-icon {
+  background: var(--accent);
+  border: 2px solid currentColor;
+  block-size: 1rem;
+  display: block;
+  inline-size: 5rem;
+  transform: rotate(-12deg);
+}
+
+.ke-family__ruler-icon {
+  background: var(--surface);
+  transform: none;
+}
+
+.ke-family__cup-icon {
+  border: 3px solid currentColor;
+  border-top: 0;
+  block-size: 4rem;
+  display: block;
+  inline-size: 3rem;
+}
+
+.ke-family__scale-icon {
+  border: 3px solid currentColor;
+  border-radius: 50% 50% 0 0;
+  block-size: 3.5rem;
+  display: block;
+  inline-size: 4rem;
+}
+
+.ke-family__unit-relations {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(12rem, 1fr));
+  min-inline-size: 26rem;
+}
+
+.ke-family__unit-relations > div {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  padding: 1rem;
+  text-align: center;
+}
+
+.ke-family__unit-relations > div.is-active {
+  box-shadow: inset 0 0 0 4px var(--accent);
+}
+
+.ke-family__unit-relations .ke-math {
+  margin: 0;
+}
+
+.ke-family__metric-capacity,
+.ke-family__metric-length {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ke-family__metric-relations {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(9rem, 1fr));
+  min-inline-size: 29rem;
+}
+
+.ke-family__metric-relations > div {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.6rem;
+  font-weight: 800;
+  padding: 0.7rem;
+  text-align: center;
+}
+
+.ke-family__metric-relations .ke-math {
+  margin: 0;
+}
+
+.ke-family__clip-measure {
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 28rem;
+}
+
+.ke-family__clip-measure > div {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 2rem 1fr;
+}
+
+.ke-family__clip-row {
+  align-items: center;
+  display: flex;
+  gap: 0.15rem;
+  min-block-size: 4rem;
+}
+
+.ke-family__clip {
+  border: 3px solid currentColor;
+  border-radius: 999px;
+  block-size: 3.5rem;
+  display: inline-block;
+  inline-size: 1.25rem;
+  transform: rotate(8deg);
+}
+
+.ke-family__standard-measure {
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 30rem;
+}
+
+.ke-family__standard-row {
+  align-items: end;
+  display: flex;
+  gap: 0.1rem;
+  margin-top: 0.45rem;
+  min-block-size: 3rem;
+  width: min(100%, 32rem);
+}
+
+.ke-family__standard-row {
+  display: grid;
+  grid-template-columns: repeat(var(--ke-standard-count), minmax(0, 1fr));
+  inline-size: min(100%, 30rem);
+}
+
+.ke-family__standard-row > .ke-family__hand-unit,
+.ke-family__standard-row > .ke-family__standard-unit {
+  inline-size: auto;
+  min-inline-size: 0;
+}
+
+.ke-family__hand-unit,
+.ke-family__standard-unit {
+  background: var(--accent-soft);
+  border: 2px solid currentColor;
+  block-size: 2.4rem;
+  display: inline-block;
+  flex: 1 1 0;
+  min-inline-size: 0.4rem;
+}
+
+.ke-family__hand-unit {
+  border-style: dashed;
+}
+
+.ke-family__standard-target {
+  background: var(--accent);
+  border: 2px solid var(--text);
+  border-radius: 0.4rem;
+  color: var(--surface);
+  font-weight: 800;
+  padding: 0.45rem;
+  text-align: center;
+  width: min(100%, 32rem);
+}
+
+.ke-family__standard-target rt {
+  color: currentColor;
+}
+
+.ke-family__standard-unit {
+  background: var(--surface);
+  border-style: dashed;
+  inline-size: 2.4rem;
+}
+
+.ke-family__die {
+  block-size: 7rem;
+  color: var(--text);
+  inline-size: 7rem;
+}
+
+.ke-family__die rect {
+  fill: var(--surface);
+  stroke: currentColor;
+  stroke-width: 4;
+}
+
+.ke-family__die circle {
+  fill: currentColor;
+}
+
+.ke-family__soroban {
+  background: var(--surface);
+  border: 0.55rem double var(--line);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(5, 1fr);
+  margin-inline: auto;
+  min-inline-size: 25rem;
+  padding: 1rem 1.5rem;
+  width: min(100%, 34rem);
+}
+
+.ke-family__soroban-stack {
+  display: grid;
+  gap: 0.65rem;
+  min-inline-size: 27rem;
+}
+
+.ke-family__soroban-column {
+  align-items: center;
+  background: linear-gradient(90deg, transparent 47%, currentColor 47% 53%, transparent 53%);
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  min-block-size: 12rem;
+}
+
+.ke-family__soroban-column button {
+  justify-self: center;
+}
+
+.ke-family__soroban-upper,
+.ke-family__soroban-lower {
+  background: var(--surface);
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  block-size: 1.1rem;
+  inline-size: 2.8rem;
+}
+
+.ke-family__soroban-upper.is-active,
+.ke-family__soroban-lower.is-active {
+  background: var(--accent);
+}
+
+.ke-family__soroban-bar {
+  background: currentColor;
+  block-size: 0.35rem;
+  inline-size: 100%;
+}
+
+.ke-family__controls input[type="number"] {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0.45rem;
+  color: var(--text);
+  font: inherit;
+  min-height: 2.75rem;
+  padding-inline: 0.6rem;
+}
+
+@media (max-width: 40rem) {
+  .ke-interactive {
+    padding: 0.75rem;
+  }
+
+  .ke-interactive__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .ke-interactive__controls button {
+    justify-self: start;
+  }
+
+  .ke-family__counter-mat {
+    grid-template-columns: 1fr;
+  }
+
+  .ke-family__counter-inverse {
+    grid-template-columns: 1fr;
+    min-inline-size: 0;
+  }
+
+  .ke-family__counter-inverse > span {
+    justify-self: center;
+  }
+
+  .ke-family__classification,
+  .ke-family__frequency,
+  .ke-family__pictograph {
+    grid-template-columns: 1fr;
+    min-inline-size: 0;
+  }
+
+  .ke-family--fraction-model .ke-family__svg {
+    min-inline-size: 100%;
+  }
+
+  .ke-family__soroban-stack,
+  .ke-family__soroban {
+    min-inline-size: 0;
+  }
+
+  .ke-family__soroban {
+    border-width: 0.35rem;
+    gap: 0.2rem;
+    padding: 0.55rem;
+    width: 100%;
+  }
+
+  .ke-family__soroban-column {
+    gap: 0.2rem;
+    min-block-size: 8rem;
+  }
+
+  .ke-family__soroban-column button {
+    display: none !important;
+  }
+
+  .ke-family__soroban-upper,
+  .ke-family__soroban-lower {
+    inline-size: min(2rem, 100%);
+  }
+}
+
+@media print {
+  .ke-interactive__controls {
+    display: none;
+  }
+
+  .ke-family [data-family-inline-action] {
+    display: none !important;
+  }
+
+  .ke-callout,
+  .ke-details,
+  .ke-interactive {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .ke-details > :not(summary) {
+    display: block !important;
+  }
+
+  .ke-interactive__viewport {
+    max-block-size: none;
+    overflow: visible;
+  }
+}
+
+@media (forced-colors: active) {
+  .ke-callout,
+  .ke-details,
+  .ke-interactive {
+    box-shadow: none;
+  }
+}

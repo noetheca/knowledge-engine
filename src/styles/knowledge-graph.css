@@ -70,12 +70,12 @@
 .kg-toolbar__controls {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.55rem;
   margin-left: auto;
 }
 
-.kg-toolbar .kg-control-icon,
-.kg-settings > summary {
+.kg-toolbar .kg-control-icon {
   align-items: center;
   background: var(--surface);
   border: 2px solid var(--text);
@@ -93,22 +93,13 @@
   width: 2.75rem;
 }
 
-.kg-settings {
-  position: relative;
-}
-
-.kg-settings > summary::-webkit-details-marker {
-  display: none;
-}
-
 .kg-thumbnail-toggle[aria-pressed="true"],
 .kg-settings[open] > summary {
   box-shadow: none;
   transform: translateY(3px);
 }
 
-.kg-toolbar .kg-control-icon:focus-visible,
-.kg-settings > summary:focus-visible {
+.kg-toolbar .kg-control-icon:focus-visible {
   outline: 3px solid var(--text);
   outline-offset: 3px;
 }
@@ -127,28 +118,41 @@
   display: none;
 }
 
-.kg-thumbnail-toggle[aria-pressed="true"]
-  .kg-control-icon__graphic--thumbnail {
-  display: none;
+.kg-simulation-toggle {
+  min-width: 8.5rem;
 }
 
-.kg-thumbnail-toggle[aria-pressed="true"]
-  .kg-control-icon__graphic--text {
-  display: block;
+.kg-simulation-status {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  max-width: 9rem;
+}
+
+.kg-settings {
+  position: relative;
+}
+
+.kg-settings > summary::-webkit-details-marker {
+  display: none;
 }
 
 .kg-settings__panel {
   background: var(--surface);
   border: 2px solid var(--text);
   border-radius: 1.1rem;
+  box-sizing: border-box;
   box-shadow: 0 6px 0 var(--shadow);
   display: grid;
   gap: 1rem;
+  left: 0.75rem;
+  max-height: calc(100svh - 9.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1rem;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.8rem);
-  width: min(18rem, calc(100vw - 1.5rem));
+  position: fixed;
+  top: 8rem;
+  width: min(20rem, calc(100vw - 1.5rem));
   z-index: 12;
 }
 
@@ -158,6 +162,22 @@
   font-weight: 700;
   gap: 0.45rem;
   grid-template-columns: 1fr auto;
+}
+
+.kg-settings__explanation {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.kg-settings__engine {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  justify-content: space-between;
+  margin: 0;
 }
 
 .kg-settings__panel output {
@@ -170,6 +190,30 @@
   cursor: pointer;
   grid-column: 1 / -1;
   width: 100%;
+}
+
+.kg-settings__toggle {
+  align-items: center;
+}
+
+.kg-settings__toggle input {
+  accent-color: var(--text);
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.kg-settings__panel [data-simulation-reset] {
+  width: 100%;
+}
+
+.kg-thumbnail-toggle[aria-pressed="true"]
+  .kg-control-icon__graphic--thumbnail {
+  display: none;
+}
+
+.kg-thumbnail-toggle[aria-pressed="true"]
+  .kg-control-icon__graphic--text {
+  display: block;
 }
 
 .kg-map-layout,
@@ -215,6 +259,11 @@
   cursor: grabbing;
 }
 
+.kg-viewport:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: -5px;
+}
+
 .kg-world {
   left: 0;
   position: absolute;
@@ -223,128 +272,68 @@
   will-change: transform;
 }
 
+.kg-edge-canvas {
+  height: 100%;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
+  width: 100%;
+}
+
+.knowledge-graph[data-edge-renderer="canvas"] .kg-edge-canvas {
+  visibility: visible;
+}
+
+.knowledge-graph[data-edge-renderer="canvas"] .kg-edges {
+  visibility: hidden;
+}
+
 .kg-edges {
   inset: 0;
   overflow: visible;
+  pointer-events: none;
   position: absolute;
 }
 
 .kg-edges path[data-knowledge-edge] {
   fill: none;
-  opacity: 1;
+  opacity: 0.36;
   stroke: var(--text);
   stroke-linecap: butt;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 1.5;
   transition: opacity 120ms ease, stroke-width 120ms ease;
+  vector-effect: non-scaling-stroke;
 }
 
-.kg-edges path[data-target-status="draft"]:not([data-edge-kind="related"]) {
-  stroke-dasharray: 1 6;
-  stroke-linecap: round;
-  stroke-width: 2;
+.kg-edges path[data-target-status="draft"] {
+  stroke-width: 1.35;
 }
 
-.kg-edges path[data-edge-kind="related"] {
-  opacity: 0;
-  stroke-dasharray: 10 5 2 5;
-  stroke-linecap: round;
-  stroke-width: 2;
+.kg-edge-arrow-marker {
+  overflow: visible;
 }
 
-.kg-edge-arrow {
+.kg-edge-arrow-marker__shape {
   fill: var(--text);
-  opacity: 1;
-  transition: opacity 120ms ease;
+  stroke: none;
 }
 
-.knowledge-graph[data-selected-node] .kg-edges path[data-knowledge-edge],
-.knowledge-graph[data-selected-node] .kg-edge-arrow {
-  opacity: 0.22;
+.knowledge-graph[data-selected-node] .kg-edges path[data-knowledge-edge] {
+  opacity: 0.07;
 }
 
-.knowledge-graph[data-selected-node] .kg-edges path.is-connected,
-.knowledge-graph[data-selected-node] .kg-edge-arrow.is-connected {
+.knowledge-graph[data-selected-node] .kg-edges path.is-connected {
   opacity: 1;
 }
 
 .knowledge-graph[data-selected-node] .kg-edges path.is-connected {
-  stroke-width: 5;
+  stroke-width: 3;
 }
 
-.knowledge-graph[data-selected-node] .kg-edges path.is-connected[data-target-status="draft"]:not([data-edge-kind="related"]) {
-  stroke-width: 2;
-}
-
-.knowledge-graph[data-selected-node] .kg-edges path[data-edge-kind="related"] {
-  opacity: 0;
-}
-
-.knowledge-graph[data-selected-node] .kg-edges path[data-edge-kind="related"].is-connected {
-  opacity: 1;
-  stroke-width: 2;
-}
-
-@keyframes kg-related-reveal-forward {
-  0% {
-    stroke-dasharray: var(--kg-related-length) var(--kg-related-length);
-    stroke-dashoffset: var(--kg-related-length);
-  }
-
-  99% {
-    stroke-dasharray: var(--kg-related-length) var(--kg-related-length);
-    stroke-dashoffset: 0;
-  }
-
-  100% {
-    stroke-dasharray: 10 5 2 5;
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes kg-related-reveal-reverse {
-  0% {
-    stroke-dasharray: var(--kg-related-length) var(--kg-related-length);
-    stroke-dashoffset: calc(0px - var(--kg-related-length));
-  }
-
-  99% {
-    stroke-dasharray: var(--kg-related-length) var(--kg-related-length);
-    stroke-dashoffset: 0;
-  }
-
-  100% {
-    stroke-dasharray: 10 5 2 5;
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes kg-related-flow-forward {
-  to {
-    stroke-dashoffset: -22px;
-  }
-}
-
-@keyframes kg-related-flow-reverse {
-  to {
-    stroke-dashoffset: 22px;
-  }
-}
-
-.knowledge-graph[data-selected-node]
-  .kg-edges
-  path[data-edge-kind="related"].is-connected[data-related-flow="forward"] {
-  animation:
-    kg-related-reveal-forward 360ms ease-out both,
-    kg-related-flow-forward 900ms linear 360ms infinite;
-}
-
-.knowledge-graph[data-selected-node]
-  .kg-edges
-  path[data-edge-kind="related"].is-connected[data-related-flow="reverse"] {
-  animation:
-    kg-related-reveal-reverse 360ms ease-out both,
-    kg-related-flow-reverse 900ms linear 360ms infinite;
+.knowledge-graph[data-selected-node] .kg-edges path.is-connected[data-target-status="draft"] {
+  stroke-width: 2.25;
 }
 
 .kg-node {
@@ -362,7 +351,11 @@
   position: absolute;
   text-align: center;
   user-select: none;
-  will-change: left, top;
+}
+
+.knowledge-graph[data-simulation-state="running"] .kg-node,
+.kg-node[data-dragging] {
+  will-change: translate;
 }
 
 .kg-node__thumbnail {
@@ -433,6 +426,7 @@
   box-shadow: none;
   cursor: grabbing;
   transform: none;
+  z-index: 2;
 }
 
 .kg-node:focus-visible {
@@ -484,16 +478,54 @@
   width: 2rem;
 }
 
-.kg-legend__sample[data-edge-kind="related"] {
-  background: repeating-linear-gradient(
-    to right,
-    var(--text) 0 10px,
-    transparent 10px 15px,
-    var(--text) 15px 17px,
-    transparent 17px 22px
-  );
-  border: 0;
-  height: 2px;
+.kg-debug-hud {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 45%, transparent);
+  border-radius: 0.65rem;
+  bottom: 0.75rem;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--shadow) 55%, transparent);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  min-width: 13.5rem;
+  padding: 0.65rem 0.75rem;
+  pointer-events: none;
+  position: fixed;
+  right: 0.75rem;
+  z-index: 30;
+}
+
+.kg-debug-hud > strong {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.kg-debug-hud dl,
+.kg-debug-hud dd {
+  margin: 0;
+}
+
+.kg-debug-hud dl {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.kg-debug-hud dl > div {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr auto;
+}
+
+.kg-debug-hud dt {
+  color: var(--muted);
+}
+
+.kg-debug-hud dd {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .kg-inspector {
@@ -1086,6 +1118,16 @@
     flex: 1;
   }
 
+  .kg-toolbar__controls {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .kg-simulation-status {
+    flex: 1 1 7rem;
+    max-width: none;
+  }
+
   .kg-toolbar__hint {
     display: none;
   }
@@ -1186,7 +1228,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .kg-edges path[data-knowledge-edge],
-  .kg-edge-arrow,
+  .kg-edge-arrow-marker__shape,
   .kg-inspector,
   .kg-node,
   .kg-reader-overlay,
@@ -1195,13 +1237,15 @@
   .kg-detail button {
     transition: none;
   }
+}
 
-  .knowledge-graph[data-selected-node]
-    .kg-edges
-    path[data-edge-kind="related"].is-connected {
-    animation: none;
-    stroke-dasharray: 10 5 2 5;
-    stroke-dashoffset: 0;
+@media print {
+  .knowledge-graph[data-edge-renderer="canvas"] .kg-edge-canvas {
+    visibility: hidden;
+  }
+
+  .knowledge-graph[data-edge-renderer="canvas"] .kg-edges {
+    visibility: visible;
   }
 }
 

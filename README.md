@@ -22,10 +22,24 @@ Contextual consumers can pass directed `contextualRelations` to
 vertical ordering, `contextFacts` for domain-specific inspector metadata, and
 `thumbnails` for an optional media view. Directed contextual relations affect
 layout and render with arrowheads. Undirected `related` links are excluded from
-physics and appear only when a connected node is selected. Setting `controls`
-enables the shared text/thumbnail toggle plus node-size and repulsion controls.
-The browser layer keeps contextual graphs simulated while visible and
-preserves the server-side settled layout as their stable starting point.
+the SVG hierarchy and appear in the selected node's related-knowledge list.
+Setting `controls` enables the shared text/thumbnail toggle when thumbnails are
+available. Layout is deterministic and build-time: prerequisite depth runs
+from top to bottom, same-rank semantic groups receive wider boundaries, and
+stable ordering reduces crossings. The browser runs adaptive continuous force
+calculation in a dedicated Web Worker, transferring packed positions to the
+semantic HTML/SVG view. A stable layout lowers its update frequency instead of
+silently stopping; reduced-motion and the explicit pause control remain
+respected. Prerequisite rank is a soft order force rather than a fixed Y
+coordinate. Controls adjust that force, relationship attraction, local
+repulsion, group cohesion, and group separation. Direct prerequisites attract
+most strongly, followed by direct related knowledge and graph-distance-two and
+-three neighbours. Fixed per-node caps keep dense stars bounded, while spatial
+collision response keeps node rectangles from overlapping. Prerequisite lines
+remain faintly visible and selection emphasizes the direct neighbourhood;
+related knowledge remains available as readable lists rather than extra SVG
+lines. The runtime decision is documented in
+[`docs/decisions/0006-continuous-grouped-knowledge-map-physics.md`](docs/decisions/0006-continuous-grouped-knowledge-map-physics.md).
 
 Filesystem paths are build-time source locations, not knowledge identities.
 Consumers can use `createTranslationFileIndex()` to match framework content

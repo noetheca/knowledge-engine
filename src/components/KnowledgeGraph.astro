@@ -28,6 +28,8 @@ interface Props {
     Record<string, readonly KnowledgeGraphContextFact[]>
   >;
   controls?: boolean;
+  /** Development-only diagnostics supplied explicitly by the consumer. */
+  debug?: boolean;
 }
 
 const {
@@ -41,6 +43,7 @@ const {
   thumbnails = {},
   contextFacts = {},
   controls = false,
+  debug = false,
 } = Astro.props;
 const defaultUi = getUiStrings(locale);
 const ui = {
@@ -61,11 +64,18 @@ const layout = layoutKnowledgeGraph(graph, {
 const hasChronology = Object.values(chronology ?? {}).some(Number.isFinite);
 const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 const positionsById = new Map(layout.nodes.map((node) => [node.id, node]));
-const hasDirectionalEdges = graph.edges.some(({ kind }) => kind !== "related");
-const hasRelatedEdges = graph.edges.some(({ kind }) => kind === "related");
+const hasDirectionalEdges = layout.edges.length > 0;
 const hasThumbnails = graph.nodes.some(
   ({ id }) => Boolean(thumbnails[id]?.trim()),
 );
+const simulationDirectLinks = graph.edges.map(({ source, target, kind }) => ({
+  source,
+  target,
+  kind,
+}));
+// Inline SVG fragment identifiers share the document namespace. A UUID keeps
+// markers isolated when more than one KnowledgeGraph is rendered on a page.
+const edgeArrowMarkerId = `kg-edge-arrow-${crypto.randomUUID()}`;
 const resolveNodes = (ids: string[]) =>
   ids.flatMap((id) => {
     const node = nodesById.get(id);
@@ -81,7 +91,9 @@ const statusLabels = ui.graph.status;
   data-initial-view={initialView}
   data-relationship-mode={relationshipMode}
   data-chronology-axis={hasChronology ? "y" : undefined}
+  data-simulation-links={JSON.stringify(simulationDirectLinks)}
   data-ui={JSON.stringify(ui.graph)}
+  data-debug={debug ? "true" : undefined}
   data-view={initialView === "list" ? "list" : "map"}
   aria-label={title}
 >
@@ -130,6 +142,22 @@ const statusLabels = ui.graph.status;
                 </svg>
               </button>
             )}
+            <button
+              class="kg-simulation-toggle"
+              type="button"
+              data-graph-simulation-toggle
+              aria-pressed="true"
+            >
+              {ui.graph.simulationStop}
+            </button>
+            <span
+              class="kg-simulation-status"
+              data-graph-simulation-status
+              role="status"
+              aria-live="polite"
+            >
+              {ui.graph.simulationRunning}
+            </span>
             <details class="kg-settings" data-graph-settings>
               <summary
                 class="kg-control-icon"
@@ -148,17 +176,36 @@ const statusLabels = ui.graph.status;
                   <circle cx="8" cy="17" r="2" />
                 </svg>
               </summary>
-              <div class="kg-settings__panel">
+              <div class="kg-settings__panel" data-graph-settings-panel>
+                <p class="kg-settings__explanation">
+                  {ui.graph.simulationExplanation}
+                </p>
+                <label class="kg-settings__toggle">
+                  <span>{ui.graph.hierarchyEnabled}</span>
+                  <input type="checkbox" checked data-hierarchy-enabled />
+                </label>
                 <label>
-                  <span>{ui.graph.nodeSize}</span>
-                  <output data-node-size-output>100%</output>
+                  <span>{ui.graph.hierarchyStrength}</span>
+                  <output data-hierarchy-output>55%</output>
                   <input
                     type="range"
-                    min="70"
-                    max="150"
-                    step="5"
+                    min="0"
+                    max="100"
+                    step="10"
+                    value="55"
+                    data-hierarchy-control
+                  />
+                </label>
+                <label>
+                  <span>{ui.graph.attractionStrength}</span>
+                  <output data-attraction-output>1.00×</output>
+                  <input
+                    type="range"
+                    min="40"
+                    max="160"
+                    step="10"
                     value="100"
-                    data-node-size-control
+                    data-attraction-control
                   />
                 </label>
                 <label>
@@ -166,13 +213,44 @@ const statusLabels = ui.graph.status;
                   <output data-repulsion-output>1.00×</output>
                   <input
                     type="range"
-                    min="25"
-                    max="200"
-                    step="5"
+                    min="40"
+                    max="180"
+                    step="10"
                     value="100"
                     data-repulsion-control
                   />
                 </label>
+                <label>
+                  <span>{ui.graph.groupStrength}</span>
+                  <output data-group-strength-output>1.00×</output>
+                  <input
+                    type="range"
+                    min="20"
+                    max="180"
+                    step="10"
+                    value="100"
+                    data-group-strength-control
+                  />
+                </label>
+                <label>
+                  <span>{ui.graph.groupSeparation}</span>
+                  <output data-group-separation-output>1.25×</output>
+                  <input
+                    type="range"
+                    min="60"
+                    max="200"
+                    step="5"
+                    value="125"
+                    data-group-separation-control
+                  />
+                </label>
+                <p class="kg-settings__engine">
+                  <span>{ui.graph.simulationEngine}</span>
+                  <output data-simulation-engine-output aria-live="polite">…</output>
+                </p>
+                <button type="button" data-simulation-reset>
+                  {ui.graph.simulationReset}
+                </button>
               </div>
             </details>
           </div>
@@ -186,7 +264,14 @@ const statusLabels = ui.graph.status;
           class="kg-viewport"
           data-graph-viewport
           aria-label={ui.graph.viewportLabel}
+          aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - Home"
+          tabindex="0"
         >
+          <canvas
+            class="kg-edge-canvas"
+            data-knowledge-edge-canvas
+            aria-hidden="true"
+          ></canvas>
           <div
             class="kg-world"
             data-graph-world
@@ -201,30 +286,34 @@ const statusLabels = ui.graph.status;
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               aria-hidden="true"
             >
+              <defs>
+                <marker
+                  id={edgeArrowMarkerId}
+                  class="kg-edge-arrow-marker"
+                  viewBox="0 -8 13 16"
+                  refX="0"
+                  refY="0"
+                  markerWidth="13"
+                  markerHeight="16"
+                  markerUnits="userSpaceOnUse"
+                  orient="auto"
+                >
+                  <path class="kg-edge-arrow-marker__shape" d="M 0 -8 L 13 0 L 0 8 Z" />
+                </marker>
+              </defs>
               {
                 layout.edges.map((edge) => (
-                  <g>
-                    <path
-                      d={edge.path}
-                      data-knowledge-edge={edge.id}
-                      data-edge-source={edge.source}
-                      data-edge-target={edge.target}
-                      data-edge-kind={edge.kind}
-                      data-target-status={nodesById.get(edge.target)?.status}
-                    />
-                    {
-                      edge.kind !== "related" && (
-                        <polygon
-                          class="kg-edge-arrow"
-                          data-knowledge-arrow={edge.id}
-                          data-edge-source={edge.source}
-                          data-edge-target={edge.target}
-                          data-target-status={nodesById.get(edge.target)?.status}
-                          points=""
-                        />
-                      )
-                    }
-                  </g>
+                  <path
+                    d={edge.path}
+                    data-knowledge-edge={edge.id}
+                    data-edge-source={edge.source}
+                    data-edge-target={edge.target}
+                    data-edge-kind={edge.kind}
+                    data-target-status={nodesById.get(edge.target)?.status}
+                    marker-end={edge.kind !== "related"
+                      ? `url(#${edgeArrowMarkerId})`
+                      : undefined}
+                  />
                 ))
               }
             </svg>
@@ -240,6 +329,8 @@ const statusLabels = ui.graph.status;
                     class="kg-node"
                     data-knowledge-node={node.id}
                     data-knowledge-href={node.href}
+                    data-knowledge-group={position.groupId}
+                    data-knowledge-rank={position.rank}
                     data-status={node.status}
                     data-has-thumbnail={thumbnail ? "true" : undefined}
                     aria-label={node.title}
@@ -265,28 +356,16 @@ const statusLabels = ui.graph.status;
           </div>
         </div>
         {
-          (hasDirectionalEdges || hasRelatedEdges) && (
+          hasDirectionalEdges && (
             <p class="kg-legend">
-              {hasDirectionalEdges && (
-                <span class="kg-legend__item">
-                  <span
-                    class="kg-legend__sample"
-                    data-edge-kind="prerequisite"
-                    aria-hidden="true"
-                  />
-                  {ui.graph.legend}
-                </span>
-              )}
-              {hasRelatedEdges && (
-                <span class="kg-legend__item">
-                  <span
-                    class="kg-legend__sample"
-                    data-edge-kind="related"
-                    aria-hidden="true"
-                  />
-                  {ui.graph.relatedLegend}
-                </span>
-              )}
+              <span class="kg-legend__item">
+                <span
+                  class="kg-legend__sample"
+                  data-edge-kind="prerequisite"
+                  aria-hidden="true"
+                />
+                {ui.graph.legend}
+              </span>
             </p>
           )
         }
@@ -301,6 +380,34 @@ const statusLabels = ui.graph.status;
         tabindex="-1"
       ></aside>
     </div>
+
+    {
+      debug && (
+        <aside class="kg-debug-hud" data-graph-debug-hud aria-hidden="true">
+          <strong>Graph diagnostics</strong>
+          <dl>
+            <div><dt>FPS</dt><dd data-debug-fps>—</dd></div>
+            <div><dt>Frame p95</dt><dd data-debug-frame-p95>—</dd></div>
+            <div><dt>Physics</dt><dd data-debug-physics-hz>—</dd></div>
+            <div><dt>Render</dt><dd data-debug-render-hz>—</dd></div>
+            <div><dt>Worker</dt><dd data-debug-compute-ms>—</dd></div>
+            <div><dt>Round trip</dt><dd data-debug-round-trip-ms>—</dd></div>
+            <div><dt>Apply</dt><dd data-debug-apply-ms>—</dd></div>
+            <div><dt>Nodes</dt><dd data-debug-nodes-ms>—</dd></div>
+            <div><dt>Edges</dt><dd data-debug-edges-ms>—</dd></div>
+            <div><dt>Render total</dt><dd data-debug-render-ms>—</dd></div>
+            <div><dt>Movement</dt><dd data-debug-movement>—</dd></div>
+            <div><dt>Long frames</dt><dd data-debug-long-frames>—</dd></div>
+            <div><dt>Graph</dt><dd data-debug-graph-size>—</dd></div>
+            <div><dt>Overlaps</dt><dd data-debug-overlaps>—</dd></div>
+            <div><dt>Spread</dt><dd data-debug-spread>—</dd></div>
+            <div><dt>Group spread</dt><dd data-debug-group-spread>—</dd></div>
+            <div><dt>State</dt><dd data-debug-state>—</dd></div>
+            <div><dt>Engine</dt><dd data-debug-engine>—</dd></div>
+          </dl>
+        </aside>
+      )
+    }
 
     <section class="kg-list-view" aria-labelledby="knowledge-list-title">
       <div class="kg-list-heading">

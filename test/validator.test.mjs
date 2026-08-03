@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   createManifest,
   createTranslationFileIndex,
+  isAllowedSourceUrl,
   loadKnowledgeBase,
   normalizeTranslationFilePath,
 } from "../dist/index.js";
@@ -40,6 +41,17 @@ const ja = (title) => ({
   body: `# ${title}`,
 });
 
+const jaWithReadingLevel = (title, readingLevel) => {
+  const translation = ja(title);
+  return {
+    ...translation,
+    frontmatter: {
+      ...translation.frontmatter,
+      readingLevel,
+    },
+  };
+};
+
 test("loads valid concepts and creates a stable manifest", async () => {
   const root = await fixture({
     natural: {
@@ -70,6 +82,72 @@ test("loads valid concepts and creates a stable manifest", async () => {
   assert.deepEqual(
     createManifest(knowledgeBase).concepts.map(({ id }) => id),
     ["math/integer", "math/natural"],
+  );
+});
+
+test("loads an optional translation reading level", async () => {
+  const root = await fixture({
+    area: {
+      metadata: {
+        schemaVersion: 1,
+        id: "math/geometry/area",
+        prerequisites: [],
+        related: [],
+      },
+      translations: {
+        ja: jaWithReadingLevel("面積", {
+          curriculum: "jp-mext-2017",
+          grade: 4,
+        }),
+      },
+    },
+  });
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  assert.deepEqual(
+    knowledgeBase.issues.filter(({ severity }) => severity === "error"),
+    [],
+  );
+  assert.deepEqual(
+    knowledgeBase.concepts[0]?.translations.get("ja")?.metadata.readingLevel,
+    { curriculum: "jp-mext-2017", grade: 4 },
+  );
+});
+
+test("rejects malformed translation reading levels", async () => {
+  const invalidReadingLevels = [
+    { curriculum: "jp-mext-2017", grade: 0 },
+    { curriculum: "jp-mext-2017", grade: 13 },
+    { curriculum: "jp-mext-2017", grade: 4.5 },
+    { curriculum: "", grade: 4 },
+    { curriculum: "jp mext 2017", grade: 4 },
+    { curriculum: "jp-mext-2017", grade: "4" },
+    null,
+  ];
+  const concepts = Object.fromEntries(
+    invalidReadingLevels.map((readingLevel, index) => [
+      `invalid-reading-level-${index}`,
+      {
+        metadata: {
+          schemaVersion: 1,
+          id: `math/invalid-reading-level-${index}`,
+          prerequisites: [],
+          related: [],
+        },
+        translations: {
+          ja: jaWithReadingLevel(`不正な読み方${index}`, readingLevel),
+        },
+      },
+    ]),
+  );
+  const root = await fixture(concepts);
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  assert.equal(
+    knowledgeBase.issues.filter(
+      ({ code }) => code === "invalid-reading-level",
+    ).length,
+    invalidReadingLevels.length,
   );
 });
 
@@ -207,4 +285,87 @@ test("rejects locale mismatches and unsafe Markdown", async () => {
   const codes = knowledgeBase.issues.map(({ code }) => code);
   assert.ok(codes.includes("locale-mismatch"));
   assert.ok(codes.includes("missing-translation"));
+});
+
+test("reports invalid article directives through content validation", async () => {
+  const root = await fixture({
+    invalidDirective: {
+      metadata: {
+        schemaVersion: 1,
+        id: "math/invalid-directive",
+        prerequisites: [],
+        related: [],
+      },
+      translations: {
+        ja: {
+          ...ja("不正なディレクティブ"),
+          body: '::interactive[図]{kind="unknown" rows="3" columns="4" unit="cm"}',
+        },
+      },
+    },
+  });
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  assert.ok(
+    knowledgeBase.issues.some(
+      ({ code }) => code === "article-directive-unknown-interactive-kind",
+    ),
+  );
+});
+
+test("allows only http and https source URLs", async () => {
+  assert.equal(isAllowedSourceUrl("https://example.com/reference"), true);
+  assert.equal(isAllowedSourceUrl("http://example.com/reference"), true);
+  assert.equal(isAllowedSourceUrl("javascript:alert(1)"), false);
+  assert.equal(isAllowedSourceUrl("data:text/html,unsafe"), false);
+
+  const base = ja("不正な出典");
+  const root = await fixture({
+    unsafeSource: {
+      metadata: {
+        schemaVersion: 1,
+        id: "math/unsafe-source",
+        prerequisites: [],
+        related: [],
+      },
+      translations: {
+        ja: {
+          ...base,
+          frontmatter: {
+            ...base.frontmatter,
+            sources: ["javascript:alert(1)"],
+          },
+        },
+      },
+    },
+  });
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  assert.ok(knowledgeBase.issues.some(({ code }) => code === "invalid-sources"));
+});
+
+test("rejects every raw HTML node through the AST validator", async () => {
+  const root = await fixture({
+    rawComment: {
+      metadata: {
+        schemaVersion: 1,
+        id: "math/raw-comment",
+        prerequisites: [],
+        related: [],
+      },
+      translations: {
+        ja: {
+          ...ja("HTMLコメント"),
+          body: "<!-- hidden -->",
+        },
+      },
+    },
+  });
+
+  const knowledgeBase = await loadKnowledgeBase(root);
+  assert.ok(
+    knowledgeBase.issues.some(
+      ({ code }) => code === "unsafe-markdown-raw-html",
+    ),
+  );
 });

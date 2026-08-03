@@ -8,6 +8,16 @@ export const CONTENT_STATUSES = [
 
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 
+export const READING_LEVEL_CURRICULUM_PATTERN =
+  /^[a-z0-9]+(?:[._/-][a-z0-9]+)*$/;
+export const READING_LEVEL_GRADE_MIN = 1 as const;
+export const READING_LEVEL_GRADE_MAX = 12 as const;
+
+export interface ReadingLevel {
+  curriculum: string;
+  grade: number;
+}
+
 export interface KnowledgeLanguageOption {
   id: string;
   label: string;
@@ -28,6 +38,7 @@ export interface TranslationMetadata {
   summary: string;
   sources: unknown[];
   status: ContentStatus;
+  readingLevel?: ReadingLevel;
 }
 
 export interface ConceptTranslation {

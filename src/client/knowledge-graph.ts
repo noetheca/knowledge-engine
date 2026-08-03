@@ -3,8 +3,27 @@ const MAX_SCALE = 2.4;
 const CAMERA_TRANSITION_DURATION_MS = 300;
 const GRID_BASE_SPACING = 24;
 const GRID_TARGET_SCREEN_SPACING = 24;
+const SIMULATION_ACTIVE_INTERVAL_MS = 1_000 / 30;
+const SIMULATION_STABLE_INTERVAL_MS = 1_000 / 12;
+const SIMULATION_STABLE_FRAME_TARGET = 12;
+const SIMULATION_STABLE_MOVEMENT = 0.045;
+const POSITION_RENDER_EPSILON = 0.12;
+const MAX_EDGE_CANVAS_PIXELS = 8_000_000;
 
 import { getUiStrings } from "../i18n/ui.js";
+import {
+  createKnowledgeGraphSimulationLinks,
+  stepKnowledgeGraphSimulation,
+  type KnowledgeGraphSimulationDirectKind,
+  type KnowledgeGraphSimulationDirectLink,
+  type KnowledgeGraphSimulationNode,
+} from "../graph/simulation.js";
+import {
+  KNOWLEDGE_GRAPH_POSITION_STRIDE,
+  type KnowledgeGraphWorkerOptions,
+  type KnowledgeGraphWorkerRequest,
+  type KnowledgeGraphWorkerResponse,
+} from "./knowledge-graph-simulation-protocol.js";
 
 interface Transform {
   x: number;
@@ -17,15 +36,6 @@ interface PointerPosition {
   y: number;
 }
 
-interface NodePosition {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  velocityX: number;
-  velocityY: number;
-}
-
 interface NodeDrag {
   pointerId: number;
   node: HTMLButtonElement;
@@ -35,15 +45,6 @@ interface NodeDrag {
   startX: number;
   startY: number;
   moved: boolean;
-}
-
-interface GraphConnection {
-  source: string;
-  target: string;
-  directional: boolean;
-  restX: number;
-  restY: number;
-  restDistance: number;
 }
 
 interface SafeArea {
@@ -93,11 +94,14 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const viewport = root.querySelector<HTMLElement>("[data-graph-viewport]");
   const world = root.querySelector<HTMLElement>("[data-graph-world]");
+  const edgeCanvas =
+    root.querySelector<HTMLCanvasElement>("[data-knowledge-edge-canvas]");
   const inspector = root.querySelector<HTMLElement>("[data-graph-inspector]");
   const fitButton = root.querySelector<HTMLButtonElement>("[data-graph-fit]");
   const viewButton =
     root.querySelector<HTMLButtonElement>("[data-graph-view-toggle]");
   const shell = root.querySelector<HTMLElement>(".kg-shell");
+  const toolbar = root.querySelector<HTMLElement>(".kg-toolbar");
   const reader = root.querySelector<HTMLElement>("[data-knowledge-reader]");
   const readerPanel = root.querySelector<HTMLElement>("[data-reader-panel]");
   const readerContent =
@@ -108,17 +112,63 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     root.querySelector<HTMLAnchorElement>("[data-reader-full-page]");
   const thumbnailToggle =
     root.querySelector<HTMLButtonElement>("[data-graph-thumbnail-toggle]");
+  const simulationToggle =
+    root.querySelector<HTMLButtonElement>("[data-graph-simulation-toggle]");
+  const simulationStatus =
+    root.querySelector<HTMLElement>("[data-graph-simulation-status]");
   const settings =
     root.querySelector<HTMLDetailsElement>("[data-graph-settings]");
   const settingsSummary = settings?.querySelector<HTMLElement>("summary");
-  const nodeSizeControl =
-    root.querySelector<HTMLInputElement>("[data-node-size-control]");
-  const nodeSizeOutput =
-    root.querySelector<HTMLOutputElement>("[data-node-size-output]");
+  const settingsPanel =
+    settings?.querySelector<HTMLElement>("[data-graph-settings-panel]");
+  const hierarchyEnabledControl =
+    root.querySelector<HTMLInputElement>("[data-hierarchy-enabled]");
+  const hierarchyControl =
+    root.querySelector<HTMLInputElement>("[data-hierarchy-control]");
+  const hierarchyOutput =
+    root.querySelector<HTMLOutputElement>("[data-hierarchy-output]");
+  const attractionControl =
+    root.querySelector<HTMLInputElement>("[data-attraction-control]");
+  const attractionOutput =
+    root.querySelector<HTMLOutputElement>("[data-attraction-output]");
   const repulsionControl =
     root.querySelector<HTMLInputElement>("[data-repulsion-control]");
   const repulsionOutput =
     root.querySelector<HTMLOutputElement>("[data-repulsion-output]");
+  const groupStrengthControl =
+    root.querySelector<HTMLInputElement>("[data-group-strength-control]");
+  const groupStrengthOutput =
+    root.querySelector<HTMLOutputElement>("[data-group-strength-output]");
+  const groupSeparationControl =
+    root.querySelector<HTMLInputElement>("[data-group-separation-control]");
+  const groupSeparationOutput =
+    root.querySelector<HTMLOutputElement>("[data-group-separation-output]");
+  const simulationEngineOutput =
+    root.querySelector<HTMLOutputElement>("[data-simulation-engine-output]");
+  const simulationReset =
+    root.querySelector<HTMLButtonElement>("[data-simulation-reset]");
+  const debugHud = root.querySelector<HTMLElement>("[data-graph-debug-hud]");
+  const debugFields = {
+    fps: root.querySelector<HTMLElement>("[data-debug-fps]"),
+    frameP95: root.querySelector<HTMLElement>("[data-debug-frame-p95]"),
+    physicsHz: root.querySelector<HTMLElement>("[data-debug-physics-hz]"),
+    renderHz: root.querySelector<HTMLElement>("[data-debug-render-hz]"),
+    computeMs: root.querySelector<HTMLElement>("[data-debug-compute-ms]"),
+    roundTripMs: root.querySelector<HTMLElement>("[data-debug-round-trip-ms]"),
+    applyMs: root.querySelector<HTMLElement>("[data-debug-apply-ms]"),
+    nodesMs: root.querySelector<HTMLElement>("[data-debug-nodes-ms]"),
+    edgesMs: root.querySelector<HTMLElement>("[data-debug-edges-ms]"),
+    renderMs: root.querySelector<HTMLElement>("[data-debug-render-ms]"),
+    movement: root.querySelector<HTMLElement>("[data-debug-movement]"),
+    longFrames: root.querySelector<HTMLElement>("[data-debug-long-frames]"),
+    graphSize: root.querySelector<HTMLElement>("[data-debug-graph-size]"),
+    overlaps: root.querySelector<HTMLElement>("[data-debug-overlaps]"),
+    spread: root.querySelector<HTMLElement>("[data-debug-spread]"),
+    groupSpread: root.querySelector<HTMLElement>("[data-debug-group-spread]"),
+    state: root.querySelector<HTMLElement>("[data-debug-state]"),
+    engine: root.querySelector<HTMLElement>("[data-debug-engine]"),
+  };
+  const debugEnabled = root.dataset.debug === "true" && Boolean(debugHud);
 
   if (
     !viewport ||
@@ -127,6 +177,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     !fitButton ||
     !viewButton ||
     !shell ||
+    !toolbar ||
     !reader ||
     !readerPanel ||
     !readerContent ||
@@ -147,10 +198,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   const nodeElements = [
     ...root.querySelectorAll<HTMLButtonElement>("[data-knowledge-node]"),
   ];
-  const nodePositions = new Map<string, NodePosition>();
-  const nodeBaseSizes = new Map<string, { width: number; height: number }>();
-  const chronologyAnchorCentersY = new Map<string, number>();
-  const chronologyAnchored = root.dataset.chronologyAxis === "y";
+  const nodePositions = new Map<string, KnowledgeGraphSimulationNode>();
   for (const node of nodeElements) {
     const nodeId = node.dataset.knowledgeNode;
     if (!nodeId) {
@@ -159,19 +207,48 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     const initialY = Number.parseFloat(node.style.top);
     const initialWidth = Number.parseFloat(node.style.width);
     const initialHeight = Number.parseFloat(node.style.height);
+    const initialX = Number.parseFloat(node.style.left);
     nodePositions.set(nodeId, {
-      x: Number.parseFloat(node.style.left),
+      id: nodeId,
+      x: initialX,
       y: initialY,
       width: initialWidth,
       height: initialHeight,
+      anchorX: initialX,
+      anchorY: initialY,
+      bandMinimumY: initialY,
+      bandMaximumY: initialY,
+      groupId: node.dataset.knowledgeGroup ?? nodeId.split("/").slice(0, 2).join("/"),
+      rank: Number.parseInt(node.dataset.knowledgeRank ?? "0", 10) || 0,
       velocityX: 0,
       velocityY: 0,
     });
-    nodeBaseSizes.set(nodeId, {
-      width: initialWidth,
-      height: initialHeight,
-    });
-    chronologyAnchorCentersY.set(nodeId, initialY + initialHeight / 2);
+    // The authored layout is expressed with left/top for the static fallback.
+    // Once enhanced, keep those properties fixed and move only with translate.
+    node.style.left = "0px";
+    node.style.top = "0px";
+    node.style.translate = `${initialX}px ${initialY}px`;
+  }
+  const rowCenters = [
+    ...new Set(
+      [...nodePositions.values()].map(({ anchorY, height }) =>
+        anchorY + height / 2,
+      ),
+    ),
+  ].sort((left, right) => left - right);
+  for (const position of nodePositions.values()) {
+    const center = position.anchorY + position.height / 2;
+    const rowIndex = rowCenters.indexOf(center);
+    const previous = rowCenters[rowIndex - 1];
+    const next = rowCenters[rowIndex + 1];
+    position.bandMinimumY =
+      previous === undefined
+        ? 16
+        : (previous + center) / 2 - position.height / 2 + 2;
+    position.bandMaximumY =
+      next === undefined
+        ? Math.max(16, graphHeight - position.height - 16)
+        : (center + next) / 2 - position.height / 2 - 2;
   }
   const nodeElementsById = new Map(
     nodeElements.flatMap((node) => {
@@ -179,49 +256,76 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return nodeId ? [[nodeId, node] as const] : [];
     }),
   );
-  const edgeArrowsById = new Map(
-    [...root.querySelectorAll<SVGPolygonElement>("[data-knowledge-arrow]")]
-      .flatMap((arrow) => {
-        const edgeId = arrow.dataset.knowledgeArrow;
-        return edgeId ? [[edgeId, arrow] as const] : [];
-      }),
-  );
-  const contextualRestDistance = (
-    source: NodePosition,
-    target: NodePosition,
-  ): number =>
-    clamp(
-      Math.max(
-        (source.width + target.width) / 2,
-        (source.height + target.height) / 2,
-      ) + 72,
-      220,
-      360,
-    );
-  const connections: GraphConnection[] = [];
-  for (const edge of root.querySelectorAll<SVGPathElement>(
-    "[data-knowledge-edge]",
-  )) {
-    if (edge.dataset.edgeKind === "related") {
-      continue;
-    }
+  const edgeElements = [
+    ...root.querySelectorAll<SVGPathElement>("[data-knowledge-edge]"),
+  ];
+  const nodePositionOrder = [...nodePositions.keys()];
+  const nodeRenderEntries = nodePositionOrder.flatMap((nodeId) => {
+    const node = nodeElementsById.get(nodeId);
+    const position = nodePositions.get(nodeId);
+    return node && position
+      ? [{ node, position, renderedX: position.x, renderedY: position.y }]
+      : [];
+  });
+  const edgeRenderEntries = edgeElements.flatMap((edge) => {
     const sourceId = edge.dataset.edgeSource;
     const targetId = edge.dataset.edgeTarget;
     const source = sourceId ? nodePositions.get(sourceId) : undefined;
     const target = targetId ? nodePositions.get(targetId) : undefined;
-    if (!sourceId || !targetId || !source || !target) {
-      continue;
+    if (!source || !target) return [];
+    return [{
+      edge,
+      sourceId: sourceId ?? source.id,
+      targetId: targetId ?? target.id,
+      kind: edge.dataset.edgeKind ?? "prerequisite",
+      draft: edge.dataset.targetStatus === "draft",
+      source,
+      target,
+      renderedSourceX: source.x,
+      renderedSourceY: source.y,
+      renderedTargetX: target.x,
+      renderedTargetY: target.y,
+    }];
+  });
+  const directKinds = new Set<KnowledgeGraphSimulationDirectKind>([
+    "prerequisite",
+    "contextual",
+    "related",
+  ]);
+  let directLinks: KnowledgeGraphSimulationDirectLink[] = [];
+  try {
+    const parsed = JSON.parse(root.dataset.simulationLinks ?? "[]") as unknown;
+    if (Array.isArray(parsed)) {
+      directLinks = parsed.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return [];
+        }
+        const candidate = entry as Record<string, unknown>;
+        return typeof candidate.source === "string" &&
+          typeof candidate.target === "string" &&
+          typeof candidate.kind === "string" &&
+          directKinds.has(candidate.kind as KnowledgeGraphSimulationDirectKind)
+          ? [{
+              source: candidate.source,
+              target: candidate.target,
+              kind: candidate.kind as KnowledgeGraphSimulationDirectKind,
+            }]
+          : [];
+      });
     }
-    connections.push({
-      source: sourceId,
-      target: targetId,
-      directional: edge.dataset.edgeKind === "contextual",
-      restX: target.x - source.x,
-      restY: target.y - source.y,
-      restDistance: contextualRestDistance(source, target),
-    });
+  } catch {
+    // A malformed optional enhancement payload leaves the static map intact.
   }
-
+  const simulationLinks = createKnowledgeGraphSimulationLinks(
+    [...nodePositions.keys()],
+    directLinks,
+    new Map(
+      [...nodePositions].map(([id, node]) => [
+        id,
+        { x: node.anchorX, y: node.anchorY },
+      ]),
+    ),
+  );
   let panAnchor: PointerPosition | undefined;
   let pinchDistance = 0;
   let pinchScale = 1;
@@ -229,21 +333,223 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   let nodeDrag: NodeDrag | undefined;
   let suppressNodeClickUntil = 0;
   let inspectorPositionFrame = 0;
+  let settingsPositionFrame = 0;
   let cameraAnimationFrame = 0;
   let simulationFrame = 0;
-  let simulationTicks = 0;
-  let simulationAnchorId: string | undefined;
-  let contextualLayoutWarmed = false;
-  let contextualUnrenderedMotion = 0;
-  let contextualRepulsionMultiplier = 1;
+  let simulationStableFrames = 0;
+  let simulationLastStepAt = 0;
+  let simulationPinnedId: string | undefined;
+  let hierarchyEnabled = true;
+  let hierarchyStrength = 0.55;
+  let attractionStrength = 1;
+  let repulsionStrength = 1;
+  let groupStrength = 1;
+  let groupSeparationStrength = 1.25;
+  let simulationActive = false;
+  let simulationStepPending = false;
+  let simulationWorkerReady = false;
+  let simulationGeneration = 1;
+  let simulationWorker: Worker | undefined;
+  let simulationEngine: "worker" | "main" = "main";
+  let renderedSimulationEngine: "worker" | "main" | undefined;
+  let currentSimulationUiState: SimulationUiState | undefined;
+  let reducedMotionOverride = false;
   let readerRequest: AbortController | undefined;
   let readerTrigger: HTMLElement | undefined;
   const readerModalQuery = window.matchMedia("(max-width: 52rem)");
   const reducedMotionQuery = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   );
-  const contextualRelationships =
-    root.dataset.relationshipMode === "contextual";
+  const debugSamples = {
+    frame: [] as number[],
+    compute: [] as number[],
+    roundTrip: [] as number[],
+    apply: [] as number[],
+    nodes: [] as number[],
+    edges: [] as number[],
+    render: [] as number[],
+  };
+  let debugWindowStartedAt = performance.now();
+  let debugPreviousFrameAt = 0;
+  let debugStepSentAt = 0;
+  let debugFrameCount = 0;
+  let debugPhysicsFrames = 0;
+  let debugRenderFrames = 0;
+  let debugLongFrames = 0;
+  let debugLastMovement = 0;
+  let edgeCanvasContext: CanvasRenderingContext2D | undefined;
+  let edgeCanvasFrame = 0;
+  let edgeCanvasReady = false;
+  let edgeCanvasFailed = false;
+  let edgeCanvasColor = "";
+  let edgeCanvasColorDirty = true;
+  let edgeCanvasPendingNodeMilliseconds = 0;
+  let edgeCanvasCssWidth = 0;
+  let edgeCanvasCssHeight = 0;
+  let edgeCanvasPixelRatio = 0;
+  let edgeCanvasSizeDirty = true;
+  let resumeCanvasAfterPrint = false;
+  const forcedColorsQuery = window.matchMedia("(forced-colors: active)");
+  interface DebugPoint {
+    x: number;
+    y: number;
+  }
+  const debugRmsRadius = (points: readonly DebugPoint[]): number => {
+    if (points.length === 0) return 0;
+    const centerX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+    const centerY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+    return Math.sqrt(
+      points.reduce(
+        (sum, point) =>
+          sum + (point.x - centerX) ** 2 + (point.y - centerY) ** 2,
+        0,
+      ) / points.length,
+    );
+  };
+  const debugNodeCenters = (initial: boolean): DebugPoint[] =>
+    [...nodePositions.values()].map((node) => ({
+      x: (initial ? node.anchorX : node.x) + node.width / 2,
+      y: (initial ? node.anchorY : node.y) + node.height / 2,
+    }));
+  const debugGroupCenters = (initial: boolean): DebugPoint[] => {
+    const groups = new Map<string, { x: number; y: number; count: number }>();
+    for (const node of nodePositions.values()) {
+      const groupId = node.groupId ?? node.id;
+      const group = groups.get(groupId) ?? { x: 0, y: 0, count: 0 };
+      group.x += (initial ? node.anchorX : node.x) + node.width / 2;
+      group.y += (initial ? node.anchorY : node.y) + node.height / 2;
+      group.count += 1;
+      groups.set(groupId, group);
+    }
+    return [...groups.values()].map((group) => ({
+      x: group.x / group.count,
+      y: group.y / group.count,
+    }));
+  };
+  const debugInitialNodeSpread = debugEnabled
+    ? debugRmsRadius(debugNodeCenters(true))
+    : 1;
+  const debugInitialGroupSpread = debugEnabled
+    ? debugRmsRadius(debugGroupCenters(true))
+    : 1;
+  const debugSpreadRatio = (current: number, initial: number): number =>
+    initial > Number.EPSILON ? current / initial : 1;
+  const pushDebugSample = (samples: number[], value: number): void => {
+    if (!debugEnabled || !Number.isFinite(value)) return;
+    if (samples.length >= 120) samples.shift();
+    samples.push(value);
+  };
+  const debugPercentile = (samples: readonly number[], percentile: number): number => {
+    if (samples.length === 0) return 0;
+    const sorted = [...samples].sort((left, right) => left - right);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * percentile))] ?? 0;
+  };
+  const setDebugField = (field: HTMLElement | null, value: string): void => {
+    if (field && field.textContent !== value) field.textContent = value;
+  };
+  const debugMetric = (samples: readonly number[]): string => {
+    const latest = samples.at(-1) ?? 0;
+    const p95 = debugPercentile(samples, 0.95);
+    return `${latest.toFixed(2)} / ${p95.toFixed(2)} ms`;
+  };
+  const debugOverlapCount = (): number => {
+    const nodes = [...nodePositions.values()];
+    let overlaps = 0;
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      if (!node) continue;
+      for (let otherIndex = index + 1; otherIndex < nodes.length; otherIndex += 1) {
+        const other = nodes[otherIndex];
+        if (
+          other &&
+          node.x < other.x + other.width &&
+          node.x + node.width > other.x &&
+          node.y < other.y + other.height &&
+          node.y + node.height > other.y
+        ) {
+          overlaps += 1;
+        }
+      }
+    }
+    return overlaps;
+  };
+  const resetDebugWindow = (timestamp: number): void => {
+    debugWindowStartedAt = timestamp;
+    debugPreviousFrameAt = 0;
+    debugFrameCount = 0;
+    debugPhysicsFrames = 0;
+    debugRenderFrames = 0;
+    debugLongFrames = 0;
+    debugSamples.frame.length = 0;
+  };
+  const flushDebug = (timestamp: number, force = false): void => {
+    if (!debugEnabled) return;
+    const elapsed = Math.max(1, timestamp - debugWindowStartedAt);
+    if (!force && elapsed < 500) return;
+    const fps = (debugFrameCount * 1_000) / elapsed;
+    const physicsHz = (debugPhysicsFrames * 1_000) / elapsed;
+    const renderHz = (debugRenderFrames * 1_000) / elapsed;
+    const frameP95 = debugPercentile(debugSamples.frame, 0.95);
+    const maximumFrame = Math.max(0, ...debugSamples.frame);
+    const groupCount = new Set(
+      [...nodePositions.values()].map((node) => node.groupId ?? node.id),
+    ).size;
+    const overlaps = debugOverlapCount();
+    const spread = debugSpreadRatio(
+      debugRmsRadius(debugNodeCenters(false)),
+      debugInitialNodeSpread,
+    );
+    const groupSpread = debugSpreadRatio(
+      debugRmsRadius(debugGroupCenters(false)),
+      debugInitialGroupSpread,
+    );
+    setDebugField(debugFields.fps, `${fps.toFixed(1)} rAF`);
+    setDebugField(debugFields.frameP95, `${frameP95.toFixed(1)} ms`);
+    setDebugField(debugFields.physicsHz, `${physicsHz.toFixed(1)} Hz`);
+    setDebugField(debugFields.renderHz, `${renderHz.toFixed(1)} Hz`);
+    setDebugField(debugFields.computeMs, debugMetric(debugSamples.compute));
+    setDebugField(debugFields.roundTripMs, debugMetric(debugSamples.roundTrip));
+    setDebugField(debugFields.applyMs, debugMetric(debugSamples.apply));
+    setDebugField(debugFields.nodesMs, debugMetric(debugSamples.nodes));
+    setDebugField(debugFields.edgesMs, debugMetric(debugSamples.edges));
+    setDebugField(debugFields.renderMs, debugMetric(debugSamples.render));
+    setDebugField(debugFields.movement, `${debugLastMovement.toFixed(3)} px`);
+    setDebugField(
+      debugFields.longFrames,
+      `${debugLongFrames} (>50 ms), max ${maximumFrame.toFixed(1)}`,
+    );
+    setDebugField(
+      debugFields.graphSize,
+      `${nodeElements.length}N ${edgeElements.length}E ${simulationLinks.length}L ${groupCount}G`,
+    );
+    setDebugField(debugFields.overlaps, String(overlaps));
+    setDebugField(debugFields.spread, `${spread.toFixed(3)}×`);
+    setDebugField(debugFields.groupSpread, `${groupSpread.toFixed(3)}×`);
+    setDebugField(debugFields.state, root.dataset.simulationState ?? "initializing");
+    setDebugField(
+      debugFields.engine,
+      `${simulationEngine}${simulationStepPending ? " (pending)" : ""}`,
+    );
+    root.dataset.debugFps = fps.toFixed(1);
+    root.dataset.debugFrameP95Ms = frameP95.toFixed(2);
+    root.dataset.debugPhysicsHz = physicsHz.toFixed(1);
+    root.dataset.debugRenderHz = renderHz.toFixed(1);
+    root.dataset.debugOverlaps = String(overlaps);
+    root.dataset.debugSpread = spread.toFixed(3);
+    root.dataset.debugGroupSpread = groupSpread.toFixed(3);
+    resetDebugWindow(timestamp);
+  };
+  const sampleDebugAnimationFrame = (timestamp: number): void => {
+    if (!debugEnabled) return;
+    if (debugPreviousFrameAt > 0) {
+      const duration = timestamp - debugPreviousFrameAt;
+      pushDebugSample(debugSamples.frame, duration);
+      if (duration > 50) debugLongFrames += 1;
+    }
+    debugPreviousFrameAt = timestamp;
+    debugFrameCount += 1;
+    flushDebug(timestamp);
+  };
   const listFirst =
     root.dataset.initialView === "list" ||
     (root.dataset.initialView === "responsive" &&
@@ -257,12 +563,70 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
 
   const getSafeArea = (): SafeArea => {
     const bounds = viewport.getBoundingClientRect();
+    const toolbarBounds = toolbar.getBoundingClientRect();
+    const toolbarBottom = toolbarBounds.bottom - bounds.top + 12;
     return {
-      top: bounds.width < 640 ? 148 : 128,
+      top: clamp(toolbarBottom, 12, Math.max(12, bounds.height - 48)),
       right: bounds.width < 640 ? 12 : 24,
       bottom: bounds.width < 640 ? 24 : 36,
       left: bounds.width < 640 ? 12 : 24,
     };
+  };
+
+  const positionSettingsPanel = (): void => {
+    if (!settings?.open || !settingsSummary || !settingsPanel) {
+      return;
+    }
+    const rootBounds = root.getBoundingClientRect();
+    const summaryBounds = settingsSummary.getBoundingClientRect();
+    const margin = 12;
+    const gap = 10;
+    const minimumLeft = rootBounds.left + margin;
+    const maximumRight = rootBounds.right - margin;
+    const panelWidth = Math.min(
+      320,
+      Math.max(1, rootBounds.width - margin * 2),
+    );
+    const availableBelow = Math.max(
+      1,
+      rootBounds.bottom - margin - summaryBounds.bottom - gap,
+    );
+    const availableAbove = Math.max(
+      1,
+      summaryBounds.top - gap - rootBounds.top - margin,
+    );
+    const preferredVisibleHeight = Math.min(settingsPanel.scrollHeight, 320);
+    const placeBelow =
+      availableBelow >= preferredVisibleHeight ||
+      availableBelow >= availableAbove;
+    const maximumHeight = placeBelow ? availableBelow : availableAbove;
+    const visibleHeight = Math.min(settingsPanel.scrollHeight, maximumHeight);
+    const top = placeBelow
+      ? summaryBounds.bottom + gap
+      : Math.max(
+          rootBounds.top + margin,
+          summaryBounds.top - gap - visibleHeight,
+        );
+    const left = clamp(
+      summaryBounds.right - panelWidth,
+      minimumLeft,
+      Math.max(minimumLeft, maximumRight - panelWidth),
+    );
+    settingsPanel.style.left = `${left}px`;
+    settingsPanel.style.top = `${top}px`;
+    settingsPanel.style.width = `${panelWidth}px`;
+    settingsPanel.style.maxHeight = `${maximumHeight}px`;
+    settingsPanel.dataset.placement = placeBelow ? "bottom" : "top";
+  };
+
+  const scheduleSettingsPanelPosition = (): void => {
+    if (settingsPositionFrame) {
+      cancelAnimationFrame(settingsPositionFrame);
+    }
+    settingsPositionFrame = requestAnimationFrame(() => {
+      settingsPositionFrame = 0;
+      positionSettingsPanel();
+    });
   };
 
   const selectedNodeElement = (): HTMLButtonElement | undefined => {
@@ -397,6 +761,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       "--kg-grid-fine-opacity",
       `${fineGridOpacity * 100}%`,
     );
+    scheduleEdgeCanvasRender();
     scheduleInspectorPosition();
   };
 
@@ -439,11 +804,14 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
           : 1 - Math.pow(-2 * progress + 2, 3) / 2;
       transform.x = startX + (targetX - startX) * eased;
       transform.y = startY + (targetY - startY) * eased;
-      renderTransform();
       if (progress < 1) {
+        // Register the next camera step before the Canvas redraw so both run
+        // in that order in the next frame and the edge layer does not lag.
         cameraAnimationFrame = requestAnimationFrame(step);
+        renderTransform();
         return;
       }
+      renderTransform();
       cameraAnimationFrame = 0;
       delete root.dataset.cameraMoving;
     };
@@ -451,8 +819,8 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   };
 
   const connectionPoint = (
-    from: NodePosition,
-    toward: NodePosition,
+    from: KnowledgeGraphSimulationNode,
+    toward: KnowledgeGraphSimulationNode,
     gap: number,
   ): PointerPosition => {
     const fromCenterX = from.x + from.width / 2;
@@ -479,469 +847,615 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     };
   };
 
-  const updateEdges = (): void => {
-    for (const edge of root.querySelectorAll<SVGPathElement>(
-      "[data-knowledge-edge]",
-    )) {
-      const sourceId = edge.dataset.edgeSource;
-      const targetId = edge.dataset.edgeTarget;
-      const source = sourceId ? nodePositions.get(sourceId) : undefined;
-      const target = targetId ? nodePositions.get(targetId) : undefined;
-      if (!source || !target) {
+  const setEdgeCanvasViewportSize = (width: number, height: number): void => {
+    const nextWidth = Math.max(0, Math.round(width));
+    const nextHeight = Math.max(0, Math.round(height));
+    if (
+      nextWidth === edgeCanvasCssWidth &&
+      nextHeight === edgeCanvasCssHeight
+    ) {
+      return;
+    }
+    edgeCanvasCssWidth = nextWidth;
+    edgeCanvasCssHeight = nextHeight;
+    edgeCanvasSizeDirty = true;
+  };
+
+  const drawEdgeCanvas = (): boolean => {
+    if (!edgeCanvas || edgeCanvasFailed || forcedColorsQuery.matches) {
+      return false;
+    }
+    const cssWidth = edgeCanvasCssWidth;
+    const cssHeight = edgeCanvasCssHeight;
+    if (cssWidth <= 0 || cssHeight <= 0) {
+      return false;
+    }
+    const context = edgeCanvasContext ?? edgeCanvas.getContext("2d", {
+      alpha: true,
+      desynchronized: true,
+    });
+    if (!context) {
+      edgeCanvasFailed = true;
+      return false;
+    }
+    edgeCanvasContext = context;
+    const requestedPixelRatio = clamp(window.devicePixelRatio || 1, 1, 2);
+    const areaLimitedPixelRatio = Math.sqrt(
+      MAX_EDGE_CANVAS_PIXELS / Math.max(1, cssWidth * cssHeight),
+    );
+    const pixelRatio = Math.min(
+      requestedPixelRatio,
+      Math.max(0.5, areaLimitedPixelRatio),
+    );
+    const pixelWidth = Math.max(1, Math.round(cssWidth * pixelRatio));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * pixelRatio));
+    if (
+      edgeCanvasSizeDirty ||
+      edgeCanvasPixelRatio !== pixelRatio ||
+      edgeCanvas.width !== pixelWidth ||
+      edgeCanvas.height !== pixelHeight
+    ) {
+      edgeCanvas.width = pixelWidth;
+      edgeCanvas.height = pixelHeight;
+      edgeCanvasPixelRatio = pixelRatio;
+      edgeCanvasSizeDirty = false;
+    }
+    if (edgeCanvasColorDirty || !edgeCanvasColor) {
+      edgeCanvasColor =
+        getComputedStyle(root).getPropertyValue("--text").trim() || "#090909";
+      edgeCanvasColorDirty = false;
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, cssWidth, cssHeight);
+    context.save();
+    context.translate(transform.x, transform.y);
+    context.scale(transform.scale, transform.scale);
+    context.strokeStyle = edgeCanvasColor;
+    context.fillStyle = edgeCanvasColor;
+    context.lineCap = "butt";
+    context.lineJoin = "round";
+    const selectedNodeId = root.dataset.selectedNode;
+    const inverseScale = 1 / Math.max(transform.scale, Number.EPSILON);
+
+    for (const entry of edgeRenderEntries) {
+      const { source, target } = entry;
+      const hasArrow = entry.kind !== "related";
+      const connected = Boolean(
+        selectedNodeId &&
+          (entry.sourceId === selectedNodeId || entry.targetId === selectedNodeId),
+      );
+      context.globalAlpha = selectedNodeId ? (connected ? 1 : 0.07) : 0.36;
+      const strokeWidth = connected && selectedNodeId
+        ? entry.draft ? 2.25 : 3
+        : entry.draft ? 1.35 : 1.5;
+      context.lineWidth = strokeWidth * inverseScale;
+
+      let arrowBaseX: number;
+      let arrowBaseY: number;
+      let directionX: number;
+      let directionY: number;
+      context.beginPath();
+      if (target.y > source.y + source.height + 8) {
+        const sourceCenterX = source.x + source.width / 2;
+        const targetCenterX = target.x + target.width / 2;
+        const startY = source.y + source.height + 4;
+        arrowBaseX = targetCenterX;
+        arrowBaseY = target.y - 5 - (hasArrow ? 13 : 0);
+        const middleY = (startY + arrowBaseY) / 2;
+        directionX = 0;
+        directionY = 1;
+        context.moveTo(sourceCenterX, startY);
+        context.bezierCurveTo(
+          sourceCenterX,
+          middleY,
+          targetCenterX,
+          middleY,
+          targetCenterX,
+          arrowBaseY,
+        );
+      } else {
+        const start = connectionPoint(source, target, 4);
+        const tip = connectionPoint(target, source, 5);
+        const dx = tip.x - start.x;
+        const dy = tip.y - start.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        directionX = dx / distance;
+        directionY = dy / distance;
+        arrowBaseX = tip.x - directionX * (hasArrow ? 13 : 0);
+        arrowBaseY = tip.y - directionY * (hasArrow ? 13 : 0);
+        context.moveTo(start.x, start.y);
+        context.lineTo(arrowBaseX, arrowBaseY);
+      }
+      context.stroke();
+
+      if (hasArrow) {
+        const perpendicularX = -directionY * 8;
+        const perpendicularY = directionX * 8;
+        context.beginPath();
+        context.moveTo(
+          arrowBaseX + directionX * 13,
+          arrowBaseY + directionY * 13,
+        );
+        context.lineTo(
+          arrowBaseX + perpendicularX,
+          arrowBaseY + perpendicularY,
+        );
+        context.lineTo(
+          arrowBaseX - perpendicularX,
+          arrowBaseY - perpendicularY,
+        );
+        context.closePath();
+        context.fill();
+      }
+    }
+    context.restore();
+    context.globalAlpha = 1;
+    if (!edgeCanvasReady) {
+      edgeCanvasReady = true;
+      root.dataset.edgeRenderer = "canvas";
+    }
+    return true;
+  };
+
+  const revealSvgEdgeFallback = (permanent = false): void => {
+    edgeCanvasReady = false;
+    edgeCanvasFailed ||= permanent;
+    edgeCanvasPendingNodeMilliseconds = 0;
+    delete root.dataset.edgeRenderer;
+    updateEdges(true);
+  };
+
+  const renderEdgeCanvasFrame = (): void => {
+    edgeCanvasFrame = 0;
+    const startedAt = debugEnabled ? performance.now() : 0;
+    try {
+      if (!drawEdgeCanvas()) {
+        if (edgeCanvasReady) revealSvgEdgeFallback();
+        return;
+      }
+    } catch {
+      revealSvgEdgeFallback(true);
+      return;
+    }
+    if (debugEnabled) {
+      const edgeMilliseconds = performance.now() - startedAt;
+      pushDebugSample(debugSamples.edges, edgeMilliseconds);
+      pushDebugSample(
+        debugSamples.render,
+        edgeCanvasPendingNodeMilliseconds + edgeMilliseconds,
+      );
+      edgeCanvasPendingNodeMilliseconds = 0;
+      debugRenderFrames += 1;
+    }
+  };
+
+  const scheduleEdgeCanvasRender = (): void => {
+    if (
+      !edgeCanvas ||
+      edgeCanvasFailed ||
+      forcedColorsQuery.matches ||
+      edgeCanvasFrame
+    ) {
+      return;
+    }
+    edgeCanvasFrame = requestAnimationFrame(renderEdgeCanvasFrame);
+  };
+
+  const updateEdges = (force = false): number => {
+    const startedAt = debugEnabled ? performance.now() : 0;
+    let writes = 0;
+    for (const entry of edgeRenderEntries) {
+      const { edge, source, target } = entry;
+      const moved =
+        Math.abs(source.x - entry.renderedSourceX) >= POSITION_RENDER_EPSILON ||
+        Math.abs(source.y - entry.renderedSourceY) >= POSITION_RENDER_EPSILON ||
+        Math.abs(target.x - entry.renderedTargetX) >= POSITION_RENDER_EPSILON ||
+        Math.abs(target.y - entry.renderedTargetY) >= POSITION_RENDER_EPSILON;
+      if (!force && !moved) continue;
+      entry.renderedSourceX = source.x;
+      entry.renderedSourceY = source.y;
+      entry.renderedTargetX = target.x;
+      entry.renderedTargetY = target.y;
+      if (edgeCanvasReady) {
+        writes += 1;
         continue;
       }
-      const prerequisite = edge.dataset.edgeKind !== "related";
+      if (target.y > source.y + source.height + 8) {
+        const sourceCenterX = source.x + source.width / 2;
+        const targetCenterX = target.x + target.width / 2;
+        const startY = source.y + source.height + 4;
+        const arrowBaseY =
+          target.y - 5 - (entry.kind !== "related" ? 13 : 0);
+        const middleY = (startY + arrowBaseY) / 2;
+        edge.setAttribute(
+          "d",
+          `M ${sourceCenterX} ${startY} ` +
+            `C ${sourceCenterX} ${middleY} ${targetCenterX} ${middleY} ` +
+            `${targetCenterX} ${arrowBaseY}`,
+        );
+        writes += 1;
+        continue;
+      }
       const start = connectionPoint(source, target, 4);
-      const end = connectionPoint(target, source, prerequisite ? 14 : 4);
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
+      const tip = connectionPoint(target, source, 5);
+      const dx = tip.x - start.x;
+      const dy = tip.y - start.y;
       const distance = Math.hypot(dx, dy) || 1;
       const directionX = dx / distance;
       const directionY = dy / distance;
-      const arrowLength = Math.min(18, distance * 0.4);
-      const arrowHalfWidth = Math.min(10, distance * 0.2);
-      const arrowBase = {
-        x: end.x - directionX * arrowLength,
-        y: end.y - directionY * arrowLength,
+      const arrowLength = entry.kind !== "related" ? 13 : 0;
+      const base = {
+        x: tip.x - directionX * arrowLength,
+        y: tip.y - directionY * arrowLength,
       };
-      const edgeId = edge.dataset.knowledgeEdge;
-      const arrow = edgeId ? edgeArrowsById.get(edgeId) : undefined;
-      if (arrow) {
-        edge.setAttribute(
-          "d",
-          `M ${start.x} ${start.y} L ${arrowBase.x} ${arrowBase.y}`,
-        );
-        const perpendicularX = -directionY;
-        const perpendicularY = directionX;
-        arrow.setAttribute(
-          "points",
-          [
-            `${end.x},${end.y}`,
-            `${arrowBase.x + perpendicularX * arrowHalfWidth},${arrowBase.y + perpendicularY * arrowHalfWidth}`,
-            `${arrowBase.x - perpendicularX * arrowHalfWidth},${arrowBase.y - perpendicularY * arrowHalfWidth}`,
-          ].join(" "),
-        );
-      } else {
-        edge.setAttribute(
-          "d",
-          `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
-        );
-      }
+      edge.setAttribute("d", `M ${start.x} ${start.y} L ${base.x} ${base.y}`);
+      writes += 1;
     }
+    if (edgeCanvasReady) {
+      if (writes > 0) scheduleEdgeCanvasRender();
+    } else if (debugEnabled) {
+      pushDebugSample(debugSamples.edges, performance.now() - startedAt);
+    }
+    return writes;
   };
 
   const renderNodePositions = (): void => {
-    for (const [nodeId, position] of nodePositions) {
-      const node = nodeElementsById.get(nodeId);
-      if (!node) {
-        continue;
-      }
-      node.style.left = `${position.x}px`;
-      node.style.top = `${position.y}px`;
-    }
-    updateEdges();
-    scheduleInspectorPosition();
-  };
-
-  const applyNodeScale = (scale: number): void => {
-    for (const [nodeId, position] of nodePositions) {
-      const baseSize = nodeBaseSizes.get(nodeId);
-      const node = nodeElementsById.get(nodeId);
-      if (!baseSize || !node) {
-        continue;
-      }
-      const centerX = position.x + position.width / 2;
-      const centerY = position.y + position.height / 2;
-      position.width = baseSize.width * scale;
-      position.height = baseSize.height * scale;
-      position.x = centerX - position.width / 2;
-      position.y = centerY - position.height / 2;
-      position.velocityX = 0;
-      position.velocityY = 0;
-      node.style.width = `${position.width}px`;
-      node.style.height = `${position.height}px`;
-    }
-    for (const connection of connections) {
-      const source = nodePositions.get(connection.source);
-      const target = nodePositions.get(connection.target);
-      if (source && target) {
-        connection.restDistance = contextualRestDistance(source, target);
-      }
-    }
-    contextualUnrenderedMotion = 0;
-    renderNodePositions();
-    startSimulation();
-  };
-
-  const contextualSimulationCanRun = (): boolean =>
-    contextualRelationships &&
-    !document.hidden &&
-    !reducedMotionQuery.matches &&
-    root.dataset.view !== "list" &&
-    root.isConnected;
-
-  const stepContextualSimulation = (render = true): number => {
-    const pinnedNodeId = nodeDrag?.nodeId;
-
-    for (const connection of connections) {
-      const source = nodePositions.get(connection.source);
-      const target = nodePositions.get(connection.target);
-      if (!source || !target) {
-        continue;
-      }
-      const sourceCenterX = source.x + source.width / 2;
-      const sourceCenterY = source.y + source.height / 2;
-      const targetCenterX = target.x + target.width / 2;
-      const targetCenterY = target.y + target.height / 2;
-      const deltaX = targetCenterX - sourceCenterX;
-      const deltaY = targetCenterY - sourceCenterY;
-      const distance = Math.hypot(deltaX, deltaY) || 1;
-      const extension = distance - connection.restDistance;
-      const force = extension * 0.0042;
-      const forceX = (deltaX / distance) * force;
-      const forceY = (deltaY / distance) * force;
-      if (connection.source !== pinnedNodeId) {
-        source.velocityX += forceX;
-        source.velocityY += forceY;
-      }
-      if (connection.target !== pinnedNodeId) {
-        target.velocityX -= forceX;
-        target.velocityY -= forceY;
-      }
-      if (connection.directional) {
-        const verticalError =
-          targetCenterY - sourceCenterY - connection.restDistance * 0.72;
-        const verticalForce = verticalError * 0.0028;
-        if (connection.source !== pinnedNodeId) {
-          source.velocityY += verticalForce;
-        }
-        if (connection.target !== pinnedNodeId) {
-          target.velocityY -= verticalForce;
-        }
-      }
-    }
-
-    // Keep unrelated nodes away from visible relationship segments. Directly
-    // dragged nodes remain under the pointer and are corrected after release.
-    for (const connection of connections) {
-      const source = nodePositions.get(connection.source);
-      const target = nodePositions.get(connection.target);
-      if (!source || !target) {
-        continue;
-      }
-      const sourceCenterX = source.x + source.width / 2;
-      const sourceCenterY = source.y + source.height / 2;
-      const targetCenterX = target.x + target.width / 2;
-      const targetCenterY = target.y + target.height / 2;
-      const segmentX = targetCenterX - sourceCenterX;
-      const segmentY = targetCenterY - sourceCenterY;
-      const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
-      if (segmentLengthSquared < 0.001) {
-        continue;
-      }
-      const segmentLength = Math.sqrt(segmentLengthSquared);
-      for (const [nodeId, position] of nodePositions) {
-        if (
-          nodeId === connection.source ||
-          nodeId === connection.target ||
-          nodeId === pinnedNodeId
-        ) {
-          continue;
-        }
-        const centerX = position.x + position.width / 2;
-        const centerY = position.y + position.height / 2;
-        const projection = clamp(
-          ((centerX - sourceCenterX) * segmentX +
-            (centerY - sourceCenterY) * segmentY) /
-            segmentLengthSquared,
-          0,
-          1,
-        );
-        const closestX = sourceCenterX + segmentX * projection;
-        const closestY = sourceCenterY + segmentY * projection;
-        let offsetX = centerX - closestX;
-        let offsetY = centerY - closestY;
-        let distance = Math.hypot(offsetX, offsetY);
-        if (distance < 0.001) {
-          const sign = nodeId < `${connection.source}\0${connection.target}`
-            ? -1
-            : 1;
-          offsetX = (-segmentY / segmentLength) * sign;
-          offsetY = (segmentX / segmentLength) * sign;
-          distance = 1;
-        }
-        const clearance =
-          Math.hypot(position.width, position.height) / 2 + 14;
-        if (distance >= clearance) {
-          continue;
-        }
-        const force = (clearance - distance) * 0.018;
-        position.velocityX += (offsetX / distance) * force;
-        position.velocityY += (offsetY / distance) * force;
-      }
-    }
-
-    const entries = [...nodePositions.entries()];
-    const repulsionRange = 620;
-    for (let index = 0; index < entries.length; index += 1) {
-      const firstEntry = entries[index];
-      if (!firstEntry) {
-        continue;
-      }
-      const [firstId, first] = firstEntry;
-      for (
-        let comparisonIndex = index + 1;
-        comparisonIndex < entries.length;
-        comparisonIndex += 1
+    const renderStartedAt = debugEnabled ? performance.now() : 0;
+    const nodesStartedAt = debugEnabled ? performance.now() : 0;
+    const selectedNodeId = root.dataset.selectedNode;
+    let selectedNodeMoved = false;
+    let nodeWrites = 0;
+    for (const entry of nodeRenderEntries) {
+      const { node, position } = entry;
+      if (
+        Math.abs(position.x - entry.renderedX) < POSITION_RENDER_EPSILON &&
+        Math.abs(position.y - entry.renderedY) < POSITION_RENDER_EPSILON
       ) {
-        const secondEntry = entries[comparisonIndex];
-        if (!secondEntry) {
-          continue;
-        }
-        const [secondId, second] = secondEntry;
-        let deltaX =
-          second.x + second.width / 2 - (first.x + first.width / 2);
-        let deltaY =
-          second.y + second.height / 2 - (first.y + first.height / 2);
-        let distance = Math.hypot(deltaX, deltaY);
-        if (distance < 0.001) {
-          const angle = ((index * 37 + comparisonIndex * 61) % 360) *
-            (Math.PI / 180);
-          deltaX = Math.cos(angle);
-          deltaY = Math.sin(angle);
-          distance = 1;
-        }
-
-        if (distance < repulsionRange) {
-          const repulsion =
-            ((repulsionRange - distance) / repulsionRange) *
-            0.32 *
-            contextualRepulsionMultiplier;
-          const forceX = (deltaX / distance) * repulsion;
-          const forceY = (deltaY / distance) * repulsion;
-          if (firstId !== pinnedNodeId) {
-            first.velocityX -= forceX;
-            first.velocityY -= forceY;
-          }
-          if (secondId !== pinnedNodeId) {
-            second.velocityX += forceX;
-            second.velocityY += forceY;
-          }
-        }
-
-        const overlapX =
-          (first.width + second.width) / 2 + 28 - Math.abs(deltaX);
-        const overlapY =
-          (first.height + second.height) / 2 + 28 - Math.abs(deltaY);
-        if (overlapX <= 0 || overlapY <= 0) {
-          continue;
-        }
-        if (overlapX < overlapY) {
-          const force = Math.sign(deltaX || 1) * overlapX * 0.024;
-          if (firstId !== pinnedNodeId) {
-            first.velocityX -= force;
-          }
-          if (secondId !== pinnedNodeId) {
-            second.velocityX += force;
-          }
-        } else {
-          const force = Math.sign(deltaY || 1) * overlapY * 0.024;
-          if (firstId !== pinnedNodeId) {
-            first.velocityY -= force;
-          }
-          if (secondId !== pinnedNodeId) {
-            second.velocityY += force;
-          }
-        }
-      }
-    }
-
-    const graphCenterX = graphWidth / 2;
-    const graphCenterY = graphHeight / 2;
-    let maximumMovement = 0;
-    for (const [nodeId, position] of nodePositions) {
-      if (nodeId === pinnedNodeId) {
-        position.velocityX = 0;
-        position.velocityY = 0;
         continue;
       }
-      const centerX = position.x + position.width / 2;
-      const centerY = position.y + position.height / 2;
-      position.velocityX += (graphCenterX - centerX) * 0.00055;
-      position.velocityY += (graphCenterY - centerY) * 0.00055;
-      if (chronologyAnchored) {
-        const anchorCenterY = chronologyAnchorCentersY.get(nodeId);
-        if (anchorCenterY !== undefined) {
-          position.velocityY += (anchorCenterY - centerY) * 0.0032;
-        }
-      }
-      position.velocityX = clamp(position.velocityX * 0.86, -12, 12);
-      position.velocityY = clamp(position.velocityY * 0.86, -12, 12);
-      position.x += position.velocityX;
-      position.y += position.velocityY;
-      maximumMovement = Math.max(
-        maximumMovement,
-        Math.hypot(position.velocityX, position.velocityY),
-      );
+      entry.renderedX = position.x;
+      entry.renderedY = position.y;
+      node.style.translate = `${position.x}px ${position.y}px`;
+      nodeWrites += 1;
+      selectedNodeMoved ||= node.dataset.knowledgeNode === selectedNodeId;
     }
-
-    if (render) {
-      contextualUnrenderedMotion += maximumMovement;
-      if (contextualUnrenderedMotion >= 0.08) {
-        contextualUnrenderedMotion = 0;
-        renderNodePositions();
-      }
+    const nodeMilliseconds = debugEnabled
+      ? performance.now() - nodesStartedAt
+      : 0;
+    if (debugEnabled) pushDebugSample(debugSamples.nodes, nodeMilliseconds);
+    const changedEdges = updateEdges();
+    if (selectedNodeMoved) {
+      scheduleInspectorPosition();
     }
-    return maximumMovement;
-  };
-
-  const warmContextualLayout = (): void => {
-    if (contextualLayoutWarmed) {
-      return;
-    }
-    contextualLayoutWarmed = true;
-    for (let tick = 0; tick < 180; tick += 1) {
-      stepContextualSimulation(false);
-    }
-    contextualUnrenderedMotion = 0;
-    renderNodePositions();
-  };
-
-  const runSimulation = (): void => {
-    simulationFrame = 0;
-    if (contextualRelationships) {
-      if (!contextualSimulationCanRun()) {
-        return;
+    if (debugEnabled && edgeCanvasReady) {
+      if (changedEdges > 0) {
+        edgeCanvasPendingNodeMilliseconds += nodeMilliseconds;
+      } else if (nodeWrites > 0) {
+        pushDebugSample(debugSamples.render, nodeMilliseconds);
+        debugRenderFrames += 1;
       }
-      stepContextualSimulation();
-      simulationFrame = requestAnimationFrame(runSimulation);
-      return;
-    }
-    simulationTicks += 1;
-    const pinnedNodeId = nodeDrag?.nodeId ?? simulationAnchorId;
-
-    for (const connection of connections) {
-      const source = nodePositions.get(connection.source);
-      const target = nodePositions.get(connection.target);
-      if (!source || !target) {
-        continue;
-      }
-      const errorX = target.x - source.x - connection.restX;
-      const errorY = target.y - source.y - connection.restY;
-      const forceX = errorX * 0.032;
-      const forceY = errorY * 0.032;
-      if (connection.source !== pinnedNodeId) {
-        source.velocityX += forceX;
-        source.velocityY += forceY;
-      }
-      if (connection.target !== pinnedNodeId) {
-        target.velocityX -= forceX;
-        target.velocityY -= forceY;
-      }
-    }
-
-    const entries = [...nodePositions.entries()];
-    for (let index = 0; index < entries.length; index += 1) {
-      const firstEntry = entries[index];
-      if (!firstEntry) {
-        continue;
-      }
-      const [firstId, first] = firstEntry;
-      for (
-        let comparisonIndex = index + 1;
-        comparisonIndex < entries.length;
-        comparisonIndex += 1
-      ) {
-        const secondEntry = entries[comparisonIndex];
-        if (!secondEntry) {
-          continue;
-        }
-        const [secondId, second] = secondEntry;
-        const deltaX =
-          second.x + second.width / 2 - (first.x + first.width / 2);
-        const deltaY =
-          second.y + second.height / 2 - (first.y + first.height / 2);
-        const overlapX =
-          (first.width + second.width) / 2 + 24 - Math.abs(deltaX);
-        const overlapY =
-          (first.height + second.height) / 2 + 24 - Math.abs(deltaY);
-        if (overlapX <= 0 || overlapY <= 0) {
-          continue;
-        }
-
-        if (overlapX < overlapY) {
-          const force = Math.sign(deltaX || 1) * overlapX * 0.045;
-          if (firstId !== pinnedNodeId) {
-            first.velocityX -= force;
-          }
-          if (secondId !== pinnedNodeId) {
-            second.velocityX += force;
-          }
-        } else {
-          const force = Math.sign(deltaY || 1) * overlapY * 0.045;
-          if (firstId !== pinnedNodeId) {
-            first.velocityY -= force;
-          }
-          if (secondId !== pinnedNodeId) {
-            second.velocityY += force;
-          }
-        }
-      }
-    }
-
-    let energy = 0;
-    for (const [nodeId, position] of nodePositions) {
-      if (nodeId === pinnedNodeId) {
-        position.velocityX = 0;
-        position.velocityY = 0;
-        continue;
-      }
-      position.velocityX *= 0.78;
-      position.velocityY *= 0.78;
-      position.x += position.velocityX;
-      position.y += position.velocityY;
-      energy +=
-        Math.abs(position.velocityX) + Math.abs(position.velocityY);
-    }
-
-    renderNodePositions();
-    if (nodeDrag || (simulationTicks < 90 && energy > 0.02)) {
-      simulationFrame = requestAnimationFrame(runSimulation);
-    } else {
-      simulationAnchorId = undefined;
-      simulationTicks = 0;
+    } else if (debugEnabled) {
+      pushDebugSample(debugSamples.render, performance.now() - renderStartedAt);
+      debugRenderFrames += 1;
     }
   };
 
-  const startSimulation = (anchorId?: string): void => {
-    if (anchorId && !contextualRelationships) {
-      simulationAnchorId = anchorId;
+  type SimulationUiState = "running" | "stable" | "paused" | "reduced";
+  const setSimulationUiState = (state: SimulationUiState): void => {
+    if (currentSimulationUiState === state) return;
+    currentSimulationUiState = state;
+    const active = state === "running" || state === "stable";
+    if (simulationToggle) {
+      simulationToggle.setAttribute("aria-pressed", String(active));
+      simulationToggle.textContent = active
+        ? ui.simulationStop
+        : ui.simulationRun;
     }
-    if (contextualRelationships) {
-      if (!contextualSimulationCanRun()) {
-        return;
-      }
-      warmContextualLayout();
+    if (simulationStatus) {
+      simulationStatus.textContent =
+        state === "running"
+          ? ui.simulationRunning
+          : state === "stable"
+            ? ui.simulationSettled
+            : state === "reduced"
+              ? ui.simulationReducedMotion
+              : ui.simulationStopped;
     }
-    if (!simulationFrame) {
-      simulationTicks = 0;
-      simulationFrame = requestAnimationFrame(runSimulation);
-    }
+    root.dataset.simulationState = state;
+    setDebugField(debugFields.state, state);
   };
 
-  const syncContextualSimulation = (): void => {
-    if (!contextualRelationships) {
-      return;
+  const updateSimulationEngineLabel = (): void => {
+    if (renderedSimulationEngine === simulationEngine) return;
+    renderedSimulationEngine = simulationEngine;
+    root.dataset.simulationEngine = simulationEngine;
+    if (simulationEngineOutput) {
+      simulationEngineOutput.value =
+        simulationEngine === "worker"
+          ? ui.simulationWorkerEngine
+          : ui.simulationMainThreadEngine;
     }
-    simulationAnchorId = undefined;
-    if (contextualSimulationCanRun()) {
-      startSimulation();
-      return;
-    }
+    setDebugField(debugFields.engine, simulationEngine);
+  };
+
+  const simulationOptions = (): KnowledgeGraphWorkerOptions => ({
+    minimumX: 16,
+    minimumY: 16,
+    maximumX: graphWidth - 16,
+    maximumY: graphHeight - 16,
+    hierarchyStrength: hierarchyEnabled ? hierarchyStrength : 0,
+    attractionStrength,
+    repulsionStrength,
+    groupStrength,
+    groupSeparationStrength,
+  });
+
+  const postWorker = (message: KnowledgeGraphWorkerRequest): void => {
+    simulationWorker?.postMessage(message);
+  };
+
+  const pauseSimulation = (state: "paused" | "reduced"): void => {
+    simulationActive = false;
     if (simulationFrame) {
       cancelAnimationFrame(simulationFrame);
       simulationFrame = 0;
     }
+    simulationPinnedId = undefined;
+    setSimulationUiState(state);
+    flushDebug(performance.now(), true);
+  };
+
+  const noteSimulationMovement = (movement: number): void => {
+    simulationStableFrames =
+      movement <= SIMULATION_STABLE_MOVEMENT
+        ? simulationStableFrames + 1
+        : 0;
+    if (!simulationActive) {
+      return;
+    }
+    setSimulationUiState(
+      simulationStableFrames >= SIMULATION_STABLE_FRAME_TARGET
+        ? "stable"
+        : "running",
+    );
+  };
+
+  const applyPackedWorkerPositions = (buffer: ArrayBuffer): boolean => {
+    const values = new Float32Array(buffer);
+    if (
+      values.length !==
+      nodePositionOrder.length * KNOWLEDGE_GRAPH_POSITION_STRIDE
+    ) {
+      return false;
+    }
+    for (const [index, nodeId] of nodePositionOrder.entries()) {
+      const node = nodePositions.get(nodeId);
+      if (!node) continue;
+      const offset = index * KNOWLEDGE_GRAPH_POSITION_STRIDE;
+      if (nodeDrag?.nodeId === nodeId) {
+        continue;
+      }
+      node.x = values[offset] ?? node.x;
+      node.y = values[offset + 1] ?? node.y;
+      node.velocityX = values[offset + 2] ?? node.velocityX;
+      node.velocityY = values[offset + 3] ?? node.velocityY;
+    }
+    return true;
+  };
+
+  const useMainThreadSimulation = (): void => {
+    simulationWorker?.terminate();
+    simulationWorker = undefined;
+    simulationWorkerReady = false;
+    simulationStepPending = false;
+    simulationEngine = "main";
+    updateSimulationEngineLabel();
+  };
+
+  const initializeSimulationWorker = (): void => {
+    try {
+      const worker = new Worker(
+        new URL("./knowledge-graph-worker.ts", import.meta.url),
+        { type: "module", name: "noetheca-knowledge-physics" },
+      );
+      simulationWorker = worker;
+      worker.addEventListener(
+        "message",
+        (event: MessageEvent<KnowledgeGraphWorkerResponse>) => {
+          const message = event.data;
+          if (message.type === "error") {
+            useMainThreadSimulation();
+            return;
+          }
+          if (message.type === "ready") {
+            if (message.generation !== simulationGeneration) return;
+            simulationWorkerReady = true;
+            simulationEngine = "worker";
+            updateSimulationEngineLabel();
+            return;
+          }
+          simulationStepPending = false;
+          if (message.generation !== simulationGeneration) return;
+          if (debugEnabled) {
+            const receivedAt = performance.now();
+            debugPhysicsFrames += 1;
+            pushDebugSample(debugSamples.compute, message.computeMilliseconds);
+            if (debugStepSentAt > 0) {
+              pushDebugSample(
+                debugSamples.roundTrip,
+                receivedAt - debugStepSentAt,
+              );
+              debugStepSentAt = 0;
+            }
+          }
+          const applyStartedAt = debugEnabled ? performance.now() : 0;
+          if (!applyPackedWorkerPositions(message.positions)) {
+            useMainThreadSimulation();
+            return;
+          }
+          if (debugEnabled) {
+            pushDebugSample(
+              debugSamples.apply,
+              performance.now() - applyStartedAt,
+            );
+            debugLastMovement = message.movement;
+          }
+          noteSimulationMovement(message.movement);
+          if (
+            root.dataset.view !== "list" &&
+            root.dataset.simulationState !== "reduced"
+          ) {
+            renderNodePositions();
+          }
+        },
+      );
+      worker.addEventListener("error", useMainThreadSimulation);
+      postWorker({
+        type: "initialize",
+        generation: simulationGeneration,
+        nodes: [...nodePositions.values()].map((node) => ({ ...node })),
+        links: simulationLinks,
+        options: simulationOptions(),
+      });
+    } catch {
+      useMainThreadSimulation();
+    }
+  };
+
+  const runSimulation = (timestamp: number): void => {
+    simulationFrame = 0;
+    sampleDebugAnimationFrame(timestamp);
+    if (!simulationActive) {
+      return;
+    }
+    if (!root.isConnected) {
+      pauseSimulation("paused");
+      simulationWorker?.terminate();
+      return;
+    }
+    const interval =
+      root.dataset.simulationState === "stable"
+        ? SIMULATION_STABLE_INTERVAL_MS
+        : SIMULATION_ACTIVE_INTERVAL_MS;
+    if (
+      !document.hidden &&
+      timestamp - simulationLastStepAt >= interval &&
+      !simulationStepPending
+    ) {
+      simulationLastStepAt = timestamp;
+      const pinnedId = nodeDrag?.nodeId ?? simulationPinnedId;
+      if (simulationWorker && simulationWorkerReady) {
+        simulationStepPending = true;
+        if (debugEnabled) debugStepSentAt = performance.now();
+        postWorker({
+          type: "step",
+          generation: simulationGeneration,
+          pinnedId,
+        });
+      } else if (!simulationWorker) {
+        const startedAt = performance.now();
+        const movement = stepKnowledgeGraphSimulation(
+          [...nodePositions.values()],
+          simulationLinks,
+          { ...simulationOptions(), pinnedId },
+        );
+        if (debugEnabled) {
+          debugPhysicsFrames += 1;
+          pushDebugSample(debugSamples.compute, performance.now() - startedAt);
+          debugLastMovement = movement;
+        }
+        noteSimulationMovement(movement);
+        if (root.dataset.view !== "list") {
+          renderNodePositions();
+        }
+      }
+    }
+    simulationFrame = requestAnimationFrame(runSimulation);
+  };
+
+  const startSimulation = (
+    trigger: "auto" | "manual" | "settings" | "drag",
+    pinnedId?: string,
+  ): void => {
+    if (trigger === "manual") {
+      reducedMotionOverride = true;
+    }
+    if (
+      trigger !== "manual" &&
+      reducedMotionQuery.matches &&
+      !reducedMotionOverride
+    ) {
+      pauseSimulation("reduced");
+      return;
+    }
+    if (!root.isConnected) {
+      return;
+    }
+    const wasActive = simulationActive;
+    simulationStableFrames = 0;
+    simulationPinnedId = pinnedId;
+    simulationActive = true;
+    if (!wasActive && debugEnabled) {
+      resetDebugWindow(performance.now());
+    }
+    setSimulationUiState("running");
+    if (!simulationFrame) {
+      simulationFrame = requestAnimationFrame(runSimulation);
+    }
+  };
+
+  const resetSimulationDefaults = (): void => {
+    hierarchyEnabled = true;
+    hierarchyStrength = 0.55;
+    attractionStrength = 1;
+    repulsionStrength = 1;
+    groupStrength = 1;
+    groupSeparationStrength = 1.25;
+    if (hierarchyEnabledControl) {
+      hierarchyEnabledControl.checked = true;
+    }
+    if (hierarchyControl) {
+      hierarchyControl.value = "55";
+      hierarchyControl.disabled = false;
+      hierarchyControl.setAttribute("aria-valuetext", "55%");
+    }
+    if (attractionControl) {
+      attractionControl.value = "100";
+      attractionControl.setAttribute("aria-valuetext", "1.00×");
+    }
+    if (repulsionControl) {
+      repulsionControl.value = "100";
+      repulsionControl.setAttribute("aria-valuetext", "1.00×");
+    }
+    if (groupStrengthControl) {
+      groupStrengthControl.value = "100";
+      groupStrengthControl.setAttribute("aria-valuetext", "1.00×");
+    }
+    if (groupSeparationControl) {
+      groupSeparationControl.value = "125";
+      groupSeparationControl.setAttribute("aria-valuetext", "1.25×");
+    }
+    hierarchyOutput && (hierarchyOutput.value = "55%");
+    attractionOutput && (attractionOutput.value = "1.00×");
+    repulsionOutput && (repulsionOutput.value = "1.00×");
+    groupStrengthOutput && (groupStrengthOutput.value = "1.00×");
+    groupSeparationOutput && (groupSeparationOutput.value = "1.25×");
+    for (const position of nodePositions.values()) {
+      position.x = position.anchorX;
+      position.y = position.anchorY;
+      position.velocityX = 0;
+      position.velocityY = 0;
+    }
+    renderNodePositions();
+    simulationGeneration += 1;
+    simulationStepPending = false;
+    postWorker({
+      type: "reset",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
   };
 
   const showReaderMessage = (
@@ -1048,19 +1562,17 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       createReaderNavSection(ui.previous, previous, "previous"),
       createReaderNavSection(ui.next, next, "next"),
     ];
-    if (contextualRelationships) {
-      const related = relationIds(
-        nodeId,
-        "[data-knowledge-related]",
-      ).flatMap((relationId) => {
-        const relation = resolveReaderRelation(relationId);
-        return relation ? [relation] : [];
-      });
-      if (related.length > 0) {
-        sections.push(
-          createReaderNavSection(ui.related, related, "related"),
-        );
-      }
+    const related = relationIds(
+      nodeId,
+      "[data-knowledge-related]",
+    ).flatMap((relationId) => {
+      const relation = resolveReaderRelation(relationId);
+      return relation ? [relation] : [];
+    });
+    if (related.length > 0) {
+      sections.push(
+        createReaderNavSection(ui.related, related, "related"),
+      );
     }
     readerNavigation.replaceChildren(...sections);
   };
@@ -1316,9 +1828,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       node.setAttribute("aria-pressed", "false");
       node.removeAttribute("data-selected");
     }
-    for (const edge of root.querySelectorAll<SVGElement>(
-      "[data-knowledge-edge], [data-knowledge-arrow]",
-    )) {
+    for (const edge of edgeElements) {
       edge.classList.remove("is-connected", "is-incoming");
       edge.removeAttribute("data-related-flow");
       edge.style.removeProperty("--kg-related-length");
@@ -1330,6 +1840,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     inspector.style.removeProperty("top");
     inspector.style.removeProperty("--kg-tail-offset");
     delete root.dataset.selectedNode;
+    scheduleEdgeCanvasRender();
   };
 
   const selectNode = (nodeId: string, smoothCamera = false): void => {
@@ -1346,9 +1857,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       node.setAttribute("aria-pressed", String(selected));
       node.toggleAttribute("data-selected", selected);
     }
-    for (const edge of root.querySelectorAll<SVGElement>(
-      "[data-knowledge-edge], [data-knowledge-arrow]",
-    )) {
+    for (const edge of edgeElements) {
       const connected =
         edge.dataset.edgeSource === nodeId || edge.dataset.edgeTarget === nodeId;
       edge.classList.toggle("is-connected", connected);
@@ -1359,6 +1868,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       edge.removeAttribute("data-related-flow");
       edge.style.removeProperty("--kg-related-length");
       if (
+        !edgeCanvasReady &&
         connected &&
         edge instanceof SVGPathElement &&
         edge.dataset.edgeKind === "related"
@@ -1375,6 +1885,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     inspector.replaceChildren(template.content.cloneNode(true));
     inspector.setAttribute("aria-hidden", "false");
     root.dataset.selectedNode = nodeId;
+    scheduleEdgeCanvasRender();
     if (root.dataset.readerOpen !== undefined) {
       const href = selectedNode.dataset.knowledgeHref;
       if (href) {
@@ -1451,7 +1962,39 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     }
     if (event.key === "Escape" && root.dataset.selectedNode) {
       clearSelection();
+      return;
     }
+    if (event.target !== viewport || root.dataset.view === "list") {
+      return;
+    }
+    const panDistance = event.shiftKey ? 120 : 48;
+    if (event.key === "ArrowUp") {
+      transform.y += panDistance;
+    } else if (event.key === "ArrowDown") {
+      transform.y -= panDistance;
+    } else if (event.key === "ArrowLeft") {
+      transform.x += panDistance;
+    } else if (event.key === "ArrowRight") {
+      transform.x -= panDistance;
+    } else if (event.key === "+" || event.key === "=") {
+      const bounds = viewport.getBoundingClientRect();
+      zoomAt(transform.scale * 1.2, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      event.preventDefault();
+      return;
+    } else if (event.key === "-" || event.key === "_") {
+      const bounds = viewport.getBoundingClientRect();
+      zoomAt(transform.scale / 1.2, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      event.preventDefault();
+      return;
+    } else if (event.key === "Home") {
+      fit();
+      event.preventDefault();
+      return;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    renderTransform();
   });
 
   fitButton.addEventListener("click", fit);
@@ -1490,8 +2033,18 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     thumbnailToggle.setAttribute("aria-label", label);
     thumbnailToggle.title = label;
   });
+  simulationToggle?.addEventListener("click", () => {
+    if (simulationActive) {
+      pauseSimulation("paused");
+    } else {
+      startSimulation("manual");
+    }
+  });
   settings?.addEventListener("toggle", () => {
     settingsSummary?.setAttribute("aria-expanded", String(settings.open));
+    if (settings.open) {
+      scheduleSettingsPanelPosition();
+    }
   });
   settings?.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !settings.open) {
@@ -1501,35 +2054,120 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     settings.open = false;
     settingsSummary?.focus({ preventScroll: true });
   });
-  nodeSizeControl?.addEventListener("input", () => {
-    const percentage = clamp(Number(nodeSizeControl.value), 70, 150);
+  hierarchyEnabledControl?.addEventListener("change", () => {
+    hierarchyEnabled = hierarchyEnabledControl.checked;
+    if (hierarchyControl) {
+      hierarchyControl.disabled = !hierarchyEnabled;
+    }
+    const label = hierarchyEnabled
+      ? `${Math.round(hierarchyStrength * 100)}%`
+      : "0%";
+    hierarchyOutput && (hierarchyOutput.value = label);
+    hierarchyEnabledControl.setAttribute(
+      "aria-valuetext",
+      hierarchyEnabled ? label : "0%",
+    );
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
+  });
+  hierarchyControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(hierarchyControl.value), 0, 100);
+    hierarchyStrength = percentage / 100;
     const label = `${Math.round(percentage)}%`;
-    nodeSizeOutput && (nodeSizeOutput.value = label);
-    nodeSizeControl.setAttribute("aria-valuetext", label);
-    applyNodeScale(percentage / 100);
+    hierarchyOutput && (hierarchyOutput.value = label);
+    hierarchyControl.setAttribute("aria-valuetext", label);
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
+  });
+  attractionControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(attractionControl.value), 40, 160);
+    attractionStrength = percentage / 100;
+    const label = `${attractionStrength.toFixed(2)}×`;
+    attractionOutput && (attractionOutput.value = label);
+    attractionControl.setAttribute("aria-valuetext", label);
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
   });
   repulsionControl?.addEventListener("input", () => {
-    const percentage = clamp(Number(repulsionControl.value), 25, 200);
-    contextualRepulsionMultiplier = percentage / 100;
-    const label = `${contextualRepulsionMultiplier.toFixed(2)}×`;
+    const percentage = clamp(Number(repulsionControl.value), 40, 180);
+    repulsionStrength = percentage / 100;
+    const label = `${repulsionStrength.toFixed(2)}×`;
     repulsionOutput && (repulsionOutput.value = label);
     repulsionControl.setAttribute("aria-valuetext", label);
-    startSimulation();
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
   });
+  groupStrengthControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(groupStrengthControl.value), 20, 180);
+    groupStrength = percentage / 100;
+    const label = `${groupStrength.toFixed(2)}×`;
+    groupStrengthOutput && (groupStrengthOutput.value = label);
+    groupStrengthControl.setAttribute("aria-valuetext", label);
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
+  });
+  groupSeparationControl?.addEventListener("input", () => {
+    const percentage = clamp(Number(groupSeparationControl.value), 60, 200);
+    groupSeparationStrength = percentage / 100;
+    const label = `${groupSeparationStrength.toFixed(2)}×`;
+    groupSeparationOutput && (groupSeparationOutput.value = label);
+    groupSeparationControl.setAttribute("aria-valuetext", label);
+    postWorker({
+      type: "configure",
+      generation: simulationGeneration,
+      options: simulationOptions(),
+    });
+    startSimulation("settings");
+  });
+  simulationReset?.addEventListener("click", resetSimulationDefaults);
   viewButton.addEventListener("click", () => {
     const showList = root.dataset.view !== "list";
     clearSelection();
     root.dataset.view = showList ? "list" : "map";
     viewButton.setAttribute("aria-pressed", String(showList));
     viewButton.textContent = showList ? ui.map : ui.list;
-    syncContextualSimulation();
     if (!showList) {
+      renderNodePositions();
       requestAnimationFrame(fit);
     }
   });
 
-  document.addEventListener("visibilitychange", syncContextualSimulation);
-  reducedMotionQuery.addEventListener("change", syncContextualSimulation);
+  document.addEventListener("visibilitychange", () => {
+    simulationLastStepAt = performance.now();
+    if (!document.hidden) resetDebugWindow(simulationLastStepAt);
+    if (!document.hidden && simulationActive && !simulationFrame) {
+      simulationFrame = requestAnimationFrame(runSimulation);
+    }
+  });
+  reducedMotionQuery.addEventListener("change", () => {
+    if (reducedMotionQuery.matches) {
+      reducedMotionOverride = false;
+      pauseSimulation("reduced");
+    } else {
+      reducedMotionOverride = false;
+      startSimulation("auto");
+    }
+  });
 
   viewport.addEventListener(
     "wheel",
@@ -1611,15 +2249,36 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       }
       const deltaX = (event.clientX - nodeDrag.startClientX) / transform.scale;
       const deltaY = (event.clientY - nodeDrag.startClientY) / transform.scale;
-      if (Math.hypot(deltaX, deltaY) > 4 / transform.scale) {
+      const firstMovement =
+        !nodeDrag.moved && Math.hypot(deltaX, deltaY) > 4 / transform.scale;
+      if (firstMovement) {
         nodeDrag.moved = true;
+        startSimulation("drag", nodeDrag.nodeId);
       }
-      position.x = nodeDrag.startX + deltaX;
-      position.y = nodeDrag.startY + deltaY;
+      if (!nodeDrag.moved) {
+        return;
+      }
+      position.x = clamp(
+        nodeDrag.startX + deltaX,
+        16,
+        graphWidth - position.width - 16,
+      );
+      position.y = clamp(
+        nodeDrag.startY + deltaY,
+        16,
+        graphHeight - position.height - 16,
+      );
+      position.velocityX = 0;
+      position.velocityY = 0;
+      postWorker({
+        type: "set-node",
+        generation: simulationGeneration,
+        id: nodeDrag.nodeId,
+        x: position.x,
+        y: position.y,
+        pinned: true,
+      });
       renderNodePositions();
-      if (nodeDrag.moved) {
-        startSimulation(nodeDrag.nodeId);
-      }
       return;
     }
 
@@ -1667,13 +2326,22 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       finishedDrag.node.removeAttribute("data-dragging");
       suppressNodeClickUntil = performance.now() + 250;
       nodeDrag = undefined;
+      simulationPinnedId = undefined;
+      const position = nodePositions.get(finishedDrag.nodeId);
+      if (position) {
+        postWorker({
+          type: "set-node",
+          generation: simulationGeneration,
+          id: finishedDrag.nodeId,
+          x: position.x,
+          y: position.y,
+          pinned: false,
+        });
+      }
       if (!cancelled && !finishedDrag.moved) {
-        simulationAnchorId = undefined;
         selectNode(finishedDrag.nodeId);
-      } else if (!cancelled) {
-        startSimulation(finishedDrag.nodeId);
       } else {
-        simulationAnchorId = undefined;
+        startSimulation("drag");
       }
       return;
     }
@@ -1709,7 +2377,16 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   });
   syncReaderModality();
 
-  const observer = new ResizeObserver(() => {
+  const observer = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.target === viewport) {
+        setEdgeCanvasViewportSize(entry.contentRect.width, entry.contentRect.height);
+      }
+    }
+    scheduleEdgeCanvasRender();
+    if (settings?.open) {
+      scheduleSettingsPanelPosition();
+    }
     if (root.dataset.view !== "list") {
       if (root.dataset.selectedNode) {
         scheduleInspectorPosition();
@@ -1719,10 +2396,67 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     }
   });
   observer.observe(viewport);
+  observer.observe(toolbar);
+  const themeObserver = new MutationObserver(() => {
+    if (!root.isConnected) {
+      themeObserver.disconnect();
+      return;
+    }
+    edgeCanvasColorDirty = true;
+    scheduleEdgeCanvasRender();
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  forcedColorsQuery.addEventListener("change", () => {
+    edgeCanvasColorDirty = true;
+    if (forcedColorsQuery.matches) {
+      if (edgeCanvasReady) revealSvgEdgeFallback();
+    } else {
+      scheduleEdgeCanvasRender();
+    }
+  });
+  edgeCanvas?.addEventListener("contextlost", (event) => {
+    event.preventDefault();
+    revealSvgEdgeFallback();
+  });
+  edgeCanvas?.addEventListener("contextrestored", () => {
+    edgeCanvasContext = undefined;
+    edgeCanvasFailed = false;
+    edgeCanvasColorDirty = true;
+    scheduleEdgeCanvasRender();
+  });
+  window.addEventListener("beforeprint", () => {
+    resumeCanvasAfterPrint = edgeCanvasReady;
+    if (edgeCanvasReady) revealSvgEdgeFallback();
+  });
+  window.addEventListener("afterprint", () => {
+    if (!resumeCanvasAfterPrint) return;
+    resumeCanvasAfterPrint = false;
+    scheduleEdgeCanvasRender();
+  });
+  window.visualViewport?.addEventListener(
+    "resize",
+    scheduleSettingsPanelPosition,
+  );
+  window.visualViewport?.addEventListener(
+    "scroll",
+    scheduleSettingsPanelPosition,
+  );
 
   root.dataset.enhanced = "true";
-  updateEdges();
-  syncContextualSimulation();
+  const initialViewportBounds = viewport.getBoundingClientRect();
+  setEdgeCanvasViewportSize(
+    initialViewportBounds.width,
+    initialViewportBounds.height,
+  );
+  updateEdges(true);
+  scheduleEdgeCanvasRender();
+  updateSimulationEngineLabel();
+  initializeSimulationWorker();
+  setSimulationUiState(reducedMotionQuery.matches ? "reduced" : "paused");
+  flushDebug(performance.now(), true);
   const fitAfterLayout = (): void => {
     requestAnimationFrame(() => requestAnimationFrame(fit));
   };
@@ -1731,6 +2465,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     // The initial double animation frame still provides a safe fallback.
   });
   fitAfterLayout();
+  requestAnimationFrame(() => startSimulation("auto"));
 }
 
 export function initKnowledgeGraphs(): void {
