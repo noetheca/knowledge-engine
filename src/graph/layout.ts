@@ -200,8 +200,24 @@ function contextualDepths(
   const compressedValues = [...new Set(depths.values())].sort(
     (left, right) => left - right,
   );
+  // A year-by-year chain should express chronology without producing a map
+  // tens of thousands of pixels tall. Preserve the ordering while grouping a
+  // long sequence into a small number of broad, deterministic cohorts.
+  const maximumDepthBands = Math.max(
+    1,
+    Math.min(
+      compressedValues.length,
+      Math.max(6, Math.ceil(Math.sqrt(ids.length))),
+    ),
+  );
   const compressed = new Map(
-    compressedValues.map((depth, index) => [depth, index]),
+    compressedValues.map((depth, index) => [
+      depth,
+      Math.min(
+        maximumDepthBands - 1,
+        Math.floor((index * maximumDepthBands) / compressedValues.length),
+      ),
+    ]),
   );
   return new Map(
     ids.map((id) => [id, compressed.get(depths.get(id) ?? 0) ?? 0]),

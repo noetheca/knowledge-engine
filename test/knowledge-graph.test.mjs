@@ -333,3 +333,53 @@ test("spreads a dense same-period cohort across compact rows", () => {
   assert.equal(rows.size, 3);
   assert.equal(layout.edges.length, 0);
 });
+
+test("keeps dense chronology in compact old-to-new cohorts", () => {
+  const concepts = Array.from({ length: 43 }, (_, index) =>
+    node(`dated-${String(index).padStart(2, "0")}`),
+  );
+  const chronology = Object.fromEntries(
+    concepts.map(({ id }, index) => [id, 1950 + index]),
+  );
+  const layout = layoutKnowledgeGraph(createKnowledgeGraphModel(concepts), {
+    strategy: "contextual",
+    chronology,
+  });
+  const ordered = [...layout.nodes].sort(
+    (left, right) => chronology[left.id] - chronology[right.id],
+  );
+  const verticalRange = (nodes) => ({
+    minimum: Math.min(...nodes.map(({ y }) => y)),
+    maximum: Math.max(...nodes.map(({ y }) => y)),
+  });
+  const early = verticalRange(ordered.slice(0, 10));
+  const middle = verticalRange(ordered.slice(16, 27));
+  const late = verticalRange(ordered.slice(-10));
+
+  assert.ok(early.maximum < middle.minimum);
+  assert.ok(middle.maximum < late.minimum);
+  assert.ok(layout.width < 3_500);
+  assert.ok(layout.height < 3_000);
+});
+
+test("caps the initial envelope of a long dated contextual chain", () => {
+  const concepts = Array.from({ length: 49 }, (_, index) =>
+    node(`chain-${String(index).padStart(2, "0")}`),
+  );
+  const graph = createKnowledgeGraphModel(concepts, {
+    contextualRelations: concepts.slice(0, -1).map(({ id }, index) => ({
+      source: id,
+      target: concepts[index + 1].id,
+    })),
+  });
+  const chronology = Object.fromEntries(
+    concepts.map(({ id }, index) => [id, 1800 + index]),
+  );
+  const layout = layoutKnowledgeGraph(graph, {
+    strategy: "contextual",
+    chronology,
+  });
+
+  assert.ok(layout.width < 3_500);
+  assert.ok(layout.height < 3_500);
+});

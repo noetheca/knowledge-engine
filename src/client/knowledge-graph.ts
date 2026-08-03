@@ -1,5 +1,3 @@
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 2.4;
 const CAMERA_TRANSITION_DURATION_MS = 300;
 const GRID_BASE_SPACING = 24;
 const GRID_TARGET_SCREEN_SPACING = 24;
@@ -24,6 +22,12 @@ import {
   type KnowledgeGraphWorkerRequest,
   type KnowledgeGraphWorkerResponse,
 } from "./knowledge-graph-simulation-protocol.js";
+import {
+  clampFitScale,
+  clampInteractiveScale,
+  measureGraphContentBounds,
+  MIN_INTERACTIVE_SCALE,
+} from "./knowledge-graph-runtime.js";
 
 interface Transform {
   x: number;
@@ -194,6 +198,7 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
   }
 
   const transform: Transform = { x: 0, y: 0, scale: 1 };
+  let interactionMinimumScale = MIN_INTERACTIVE_SCALE;
   const pointers = new Map<number, PointerPosition>();
   const nodeElements = [
     ...root.querySelectorAll<HTMLButtonElement>("[data-knowledge-node]"),
@@ -1693,7 +1698,10 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
     const pointY = clientY - bounds.top;
     const worldX = (pointX - transform.x) / transform.scale;
     const worldY = (pointY - transform.y) / transform.scale;
-    transform.scale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
+    transform.scale = clampInteractiveScale(
+      nextScale,
+      interactionMinimumScale,
+    );
     transform.x = pointX - worldX * transform.scale;
     transform.y = pointY - worldY * transform.scale;
     renderTransform();
@@ -1706,26 +1714,18 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       return;
     }
     const safe = getSafeArea();
-    const contentLeft = Math.min(
-      0,
-      ...[...nodePositions.values()].map((position) => position.x - 48),
-    );
-    const contentTop = Math.min(
-      0,
-      ...[...nodePositions.values()].map((position) => position.y - 48),
-    );
-    const contentRight = Math.max(
-      graphWidth,
-      ...[...nodePositions.values()].map(
-        (position) => position.x + position.width + 48,
-      ),
-    );
-    const contentBottom = Math.max(
-      graphHeight,
-      ...[...nodePositions.values()].map(
-        (position) => position.y + position.height + 48,
-      ),
-    );
+    const contentBounds = measureGraphContentBounds([
+      ...nodePositions.values(),
+    ]);
+    if (!contentBounds) {
+      return;
+    }
+    const {
+      left: contentLeft,
+      top: contentTop,
+      right: contentRight,
+      bottom: contentBottom,
+    } = contentBounds;
     const contentWidth = contentRight - contentLeft;
     const contentHeight = contentBottom - contentTop;
     const availableWidth = Math.max(
@@ -1736,14 +1736,16 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       1,
       bounds.height - safe.top - safe.bottom,
     );
-    transform.scale = clamp(
+    transform.scale = clampFitScale(
       Math.min(
         availableWidth / contentWidth,
         availableHeight / contentHeight,
         1.25,
       ),
-      MIN_SCALE,
-      MAX_SCALE,
+    );
+    interactionMinimumScale = Math.min(
+      MIN_INTERACTIVE_SCALE,
+      transform.scale,
     );
     transform.x =
       safe.left +
@@ -2159,6 +2161,22 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
       simulationFrame = requestAnimationFrame(runSimulation);
     }
   });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) {
+      return;
+    }
+    if (simulationFrame) {
+      cancelAnimationFrame(simulationFrame);
+      simulationFrame = 0;
+    }
+    simulationLastStepAt = performance.now();
+    resetDebugWindow(simulationLastStepAt);
+    renderNodePositions();
+    scheduleEdgeCanvasRender();
+    if (!document.hidden && simulationActive) {
+      simulationFrame = requestAnimationFrame(runSimulation);
+    }
+  });
   reducedMotionQuery.addEventListener("change", () => {
     if (reducedMotionQuery.matches) {
       reducedMotionOverride = false;
@@ -2306,10 +2324,9 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         x: (first.x + second.x) / 2 - bounds.left,
         y: (first.y + second.y) / 2 - bounds.top,
       };
-      transform.scale = clamp(
+      transform.scale = clampInteractiveScale(
         pinchScale * (distance / pinchDistance),
-        MIN_SCALE,
-        MAX_SCALE,
+        interactionMinimumScale,
       );
       transform.x = midpoint.x - pinchWorldPoint.x * transform.scale;
       transform.y = midpoint.y - pinchWorldPoint.y * transform.scale;
