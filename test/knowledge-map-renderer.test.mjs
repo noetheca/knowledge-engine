@@ -132,6 +132,26 @@ test("keeps keyboard navigation and the accessible list fallback", () => {
   assert.match(clientSource, /event\.key === "Home"/);
 });
 
+test("enhances fetched reader articles and responds to the reader width", () => {
+  assert.match(componentSource, /import "katex\/dist\/katex\.min\.css"/);
+  assert.match(componentSource, /import "\.\.\/styles\/article-directives\.css"/);
+  assert.match(clientSource, /import\(\s*"\.\/article-directives\.js"\s*\)/);
+  assert.match(clientSource, /initArticleDirectives\(importedArticle\)/);
+  assert.match(graphStyles, /container-name: kg-reader/);
+  assert.match(
+    graphStyles,
+    /@container kg-reader \(max-width: 48rem\)[\s\S]*?\.kg-reader-footer\s*\{[^}]*grid-template-columns: 1fr;/,
+  );
+  assert.match(
+    graphStyles,
+    /@container kg-reader \(max-width: 48rem\)[\s\S]*?repeat\(auto-fit, minmax\(min\(10rem, 100%\), 1fr\)\)/,
+  );
+  assert.match(
+    graphStyles,
+    /@container kg-reader \(max-width: 48rem\)[\s\S]*?\.kg-reader-nav-links::before,[\s\S]*?display: none;/,
+  );
+});
+
 test("keeps graph settings reachable in short and narrow viewports", () => {
   assert.match(componentSource, /data-graph-settings-panel/);
   assert.match(clientSource, /root\.getBoundingClientRect\(\)/);

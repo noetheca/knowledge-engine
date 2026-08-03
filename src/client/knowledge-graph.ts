@@ -1665,6 +1665,23 @@ function initializeKnowledgeGraph(root: HTMLElement): void {
         }
       }
       readerContent.replaceChildren(importedArticle);
+      try {
+        const { initArticleDirectives } = await import(
+          "./article-directives.js"
+        );
+        if (
+          request.signal.aborted ||
+          readerRequest !== request ||
+          !importedArticle.isConnected
+        ) {
+          return;
+        }
+        initArticleDirectives(importedArticle);
+      } catch (error) {
+        // The server-rendered article remains readable when an optional
+        // interactive enhancement cannot be loaded.
+        console.error("Article directive enhancement failed.", error);
+      }
       readerPanel.setAttribute("aria-busy", "false");
     } catch (error) {
       if (request.signal.aborted) {

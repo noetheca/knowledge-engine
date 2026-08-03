@@ -2,6 +2,8 @@
 import type { KnowledgeGraphModel } from "../graph/model";
 import { layoutKnowledgeGraph } from "../graph/layout";
 import { getUiStrings, type UiStrings } from "../i18n/ui";
+import "katex/dist/katex.min.css";
+import "../styles/article-directives.css";
 import "../styles/knowledge-graph.css";
 
 type KnowledgeGraphLabels = Partial<

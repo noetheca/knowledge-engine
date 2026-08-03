@@ -812,6 +812,8 @@
   backdrop-filter: blur(10px);
   border: 0;
   border-left: 2px solid var(--text);
+  container-name: kg-reader;
+  container-type: inline-size;
   height: 100%;
   margin-left: auto;
   max-width: 48rem;
@@ -1223,6 +1225,49 @@
 
   .kg-legend {
     font-size: 0.65rem;
+  }
+}
+
+@container kg-reader (max-width: 48rem) {
+  .kg-reader-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .kg-reader-nav-section[data-direction="previous"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .kg-reader-actions {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: center;
+    padding-top: 0;
+    width: min(100%, 22rem);
+  }
+
+  .kg-reader-nav-section[data-direction="next"] {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .kg-reader-nav-section[data-direction="related"] {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .kg-reader-nav-links,
+  .kg-reader-nav-links[data-branching="true"] {
+    grid-template-columns:
+      repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+    padding-left: 0;
+    padding-top: 0.9rem;
+  }
+
+  .kg-reader-nav-links::before,
+  .kg-reader-nav-links::after,
+  .kg-reader-nav-link::before {
+    display: none;
   }
 }
 
