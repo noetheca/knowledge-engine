@@ -12,8 +12,8 @@ importers:
         specifier: 0.3.5
         version: 0.3.5
       katex:
-        specifier: 0.18.1
-        version: 0.18.1
+        specifier: 0.18.4
+        version: 0.18.4
       satteri:
         specifier: 0.9.5
         version: 0.9.5
@@ -1077,8 +1077,8 @@ packages:
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
-  katex@0.18.1:
-    resolution: {integrity: sha512-Td8GCYSxDAoMhHOlKmCFMJ/hz5qlAAb71n66Dryw9nfCVfumLo7nhuotbvKom/XPADmrYC3O5QR71EPq4DarJQ==}
+  katex@0.18.4:
+    resolution: {integrity: sha512-IMPntbRLOU+eu88XDiFKqQ8Akhr9Tv7jDMXqPhjG9SI1JMA4DIgXk4x9k4skJz2NZJXBRbC+2pYBLj9olqcZow==}
     hasBin: true
 
   lightningcss-android-arm64@1.33.0:
@@ -2479,7 +2479,7 @@ snapshots:
 
   jsonc-parser@3.3.1: {}
 
-  katex@0.18.1:
+  katex@0.18.4:
     dependencies:
       commander: 8.3.0
 

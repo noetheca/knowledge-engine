@@ -44,7 +44,7 @@
   "packageManager": "pnpm@11.9.0",
   "dependencies": {
     "@astrojs/markdown-satteri": "0.3.5",
-    "katex": "0.18.1",
+    "katex": "0.18.4",
     "satteri": "0.9.5",
     "yaml": "2.9.0"
   },
